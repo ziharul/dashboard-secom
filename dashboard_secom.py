@@ -7,6 +7,7 @@ metrik benchmark TIDAK dihitung ulang dari CSV yang diunggah.
 """
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -26,60 +27,8 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 # Rekap hasil yang sudah dihitung di notebook sumber, bukan hasil training baru.
 # -----------------------------------------------------------------------------
-STUDY = {
-    "wafer": 1567, "features": 590, "pass": 1463, "fail": 104,
-    "train": 1175, "test": 392, "test_fail": 26, "test_pass": 366,
-    "pr_auc_cv": 0.223, "pr_auc_cv_sd": 0.083,
-    "pr_auc_test": 0.240, "pr_auc_ci": (0.134, 0.394),
-    "roc_auc_test": 0.798, "roc_auc_ci": (0.717, 0.875),
-    "threshold": 0.1372,
-}
-
-# Semua 19 model pada screening 5-fold x 2 repeat di notebook.
-# (nama, PR-AUC, simpangan baku PR-AUC, ROC-AUC, G-mean pada threshold default,
-#  akurasi pada threshold default)
-MODEL_RESULTS = [
-    ("Extra Trees", .223, .083, .749, .000, .934),
-    ("Easy Ensemble", .219, .079, .712, .632, .652),
-    ("Balanced Random Forest", .217, .071, .735, .469, .879),
-    ("Random Forest", .211, .066, .733, .000, .934),
-    ("XGBoost", .194, .061, .702, .107, .932),
-    ("Logistic Regression (L1)", .189, .063, .689, .611, .771),
-    ("LightGBM", .186, .050, .703, .025, .934),
-    ("MLP + SMOTE", .185, .072, .670, .399, .893),
-    ("CatBoost", .180, .041, .690, .156, .928),
-    ("LDA (shrinkage)", .179, .061, .679, .552, .810),
-    ("Logistic Regression (L2)", .179, .060, .668, .539, .812),
-    ("Linear SVM", .178, .059, .667, .600, .722),
-    ("SVM RBF", .172, .042, .667, .172, .930),
-    ("HistGradientBoosting", .171, .041, .659, .050, .933),
-    ("RUSBoost", .118, .034, .635, .426, .801),
-    ("KNN (k=15) + SMOTE", .104, .026, .621, .324, .168),
-    ("Decision Tree", .102, .048, .570, .502, .778),
-    ("AdaBoost (stump berbobot)", .098, .015, .632, .501, .754),
-    ("Gaussian Naive Bayes", .095, .020, .567, .513, .440),
-]
-
-# Evaluasi test set Extra Trees; threshold ditetapkan dari OOF train.
-# (nama, threshold, TP, FN, FP, TN, sensitivity, specificity, precision, G-mean,
-#  MCC, accuracy)
-OPERATING_POINTS = [
-    ("G-mean maksimum (utama)", .1372, 21, 5, 107, 259, .808, .708, .164, .756, .273, .714),
-    ("F2 maksimum", .150, 19, 7, 76, 290, .731, .792, .200, .761, .304, .788),
-    ("MCC maksimum", .193, 6, 20, 31, 335, .231, .915, .162, .460, .124, .870),
-    ("Akurasi ≥ 90%", .217, 5, 21, 17, 349, .192, .954, .227, .428, .158, .903),
-    ("Default 0,50", .500, 0, 26, 0, 366, .000, 1.000, .000, .000, .000, .934),
-]
-
-TOP_SENSORS = [
-    ("f103", .6779, .0001), ("f59", .6694, .0001),
-    ("f247", .6699, .0050), ("f510", .6375, .0050),
-    ("f519", .6687, .0050), ("f477", .6354, .0050),
-    ("f205", .6332, .0056), ("f341", .6236, .0155),
-    ("f95", .6112, .0233), ("f21", .6179, .0233),
-    ("f33", .6167, .0243), ("f385", .6395, .0330),
-]
-IMPORTANT_SENSORS = ["f59", "f33", "f103", "f205", "f21", "f247", "f130", "f213", "f587", "f129"]
+# Hasil penelitian berasal dari output Colab yang disertakan sebagai tabel
+# NOTEBOOK_RESULTS di bawah. Tidak ada perhitungan ulang hasil model.
 MONTHLY_FAIL = [
     ("Jul 2008", .2222), ("Agu 2008", .0919),
     ("Sep 2008", .0288), ("Okt 2008", .0613),
@@ -291,35 +240,6 @@ def donut_counts(pass_count: int, fail_count: int) -> go.Figure:
     return fig
 
 
-def df_models() -> pd.DataFrame:
-    return pd.DataFrame(
-        MODEL_RESULTS,
-        columns=["Model", "PR-AUC", "SD PR-AUC", "ROC-AUC", "G-mean", "Akurasi"],
-    )
-
-
-def df_operating() -> pd.DataFrame:
-    return pd.DataFrame(
-        OPERATING_POINTS,
-        columns=["Strategi", "Threshold", "TP", "FN", "FP", "TN", "Sensitivitas", "Spesifisitas", "Presisi", "G-mean", "MCC", "Akurasi"],
-    )
-
-
-def bar_models(data: pd.DataFrame, metric: str) -> go.Figure:
-    d = data.sort_values(metric)
-    colors = [BLUE if n == "Extra Trees" else "#9DB5DC" for n in d["Model"]]
-    fig = go.Figure(go.Bar(
-        y=d["Model"], x=d[metric], orientation="h", marker_color=colors,
-        text=[f"{v:.3f}" for v in d[metric]], textposition="outside",
-        hovertemplate="%{y}<br>" + metric + ": %{x:.3f}<extra></extra>",
-    ))
-    maximum = max(1e-5, float(d[metric].max()))
-    fig.update_layout(**base_chart(max(285, len(d)*37+55), dict(l=6,r=50,t=18,b=26)),
-                      xaxis=dict(range=[0, min(1.0, maximum*1.25)], showgrid=True, gridcolor="#E5EDF6"),
-                      yaxis=dict(title="", automargin=True), showlegend=False)
-    return fig
-
-
 def confusion_chart(row: pd.Series) -> go.Figure:
     # Rows are actual classes: Pass, Fail. Columns are predictions: Pass, Fail.
     matrix = [[int(row["TN"]), int(row["FP"])], [int(row["FN"]), int(row["TP"])]]
@@ -380,320 +300,381 @@ def month_series(frame: pd.DataFrame) -> pd.DataFrame | None:
     return summary
 
 
+
+# Semua tabel di bawah diekstrak dari output notebook Google Colab yang diberikan pengguna.
+NOTEBOOK_RESULTS = json.loads('{"split":[{"Keterangan":"Train","n":1175,"Fail":78,"Pass":1097,"proporsi Fail":0.0664},{"Keterangan":"Test","n":392,"Fail":26,"Pass":366,"proporsi Fail":0.0663}],"quality":[{"Keterangan":"Sel kosong (% dari seluruh sel)","Nilai":4.5375},{"Keterangan":"Fitur dengan missing > 0","Nilai":538.0},{"Keterangan":"Fitur dengan missing > 50%","Nilai":28.0},{"Keterangan":"Fitur konstan (1 nilai unik)","Nilai":116.0},{"Keterangan":"Fitur dengan ≤ 2 nilai unik","Nilai":122.0},{"Keterangan":"Wafer dengan ≥ 1 nilai kosong","Nilai":1567.0},{"Keterangan":"Baris duplikat","Nilai":0.0}],"baseline":[{"Keterangan":"Dummy: acak stratified","pr_auc":"0.074 ± 0.019","roc_auc":"0.498 ± 0.044","g_mean":"0.134 ± 0.177","bal_acc":"0.498 ± 0.044","mcc":"-0.005 ± 0.095","recall":"0.052 ± 0.082","specificity":"0.944 ± 0.006","accuracy":"0.885 ± 0.011","waktu (s)":1.8},{"Keterangan":"Dummy: selalu Pass","pr_auc":"0.066 ± 0.002","roc_auc":"0.500 ± 0.000","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":1.9}],"screening":[{"Keterangan":"Extra Trees","pr_auc":"0.223 ± 0.083","roc_auc":"0.749 ± 0.031","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":8.0},{"Keterangan":"Easy Ensemble","pr_auc":"0.219 ± 0.079","roc_auc":"0.712 ± 0.053","g_mean":"0.632 ± 0.053","bal_acc":"0.635 ± 0.050","mcc":"0.140 ± 0.051","recall":"0.615 ± 0.106","specificity":"0.655 ± 0.028","accuracy":"0.652 ± 0.025","waktu (s)":19.6},{"Keterangan":"Balanced Random Forest","pr_auc":"0.217 ± 0.071","roc_auc":"0.735 ± 0.034","g_mean":"0.469 ± 0.067","bal_acc":"0.584 ± 0.038","mcc":"0.158 ± 0.083","recall":"0.243 ± 0.068","specificity":"0.924 ± 0.033","accuracy":"0.879 ± 0.031","waktu (s)":8.8},{"Keterangan":"Random Forest","pr_auc":"0.211 ± 0.066","roc_auc":"0.733 ± 0.048","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":18.1},{"Keterangan":"XGBoost","pr_auc":"0.194 ± 0.061","roc_auc":"0.702 ± 0.042","g_mean":"0.107 ± 0.164","bal_acc":"0.517 ± 0.030","mcc":"0.082 ± 0.152","recall":"0.038 ± 0.059","specificity":"0.995 ± 0.005","accuracy":"0.932 ± 0.007","waktu (s)":17.6},{"Keterangan":"Logistic Regression (L1)","pr_auc":"0.189 ± 0.063","roc_auc":"0.689 ± 0.060","g_mean":"0.611 ± 0.078","bal_acc":"0.636 ± 0.058","mcc":"0.162 ± 0.070","recall":"0.480 ± 0.115","specificity":"0.791 ± 0.024","accuracy":"0.771 ± 0.023","waktu (s)":2.2},{"Keterangan":"LightGBM","pr_auc":"0.186 ± 0.050","roc_auc":"0.703 ± 0.045","g_mean":"0.025 ± 0.075","bal_acc":"0.503 ± 0.009","mcc":"0.016 ± 0.048","recall":"0.006 ± 0.019","specificity":"1.000 ± 0.001","accuracy":"0.934 ± 0.002","waktu (s)":15.4},{"Keterangan":"MLP + SMOTE","pr_auc":"0.185 ± 0.072","roc_auc":"0.670 ± 0.063","g_mean":"0.399 ± 0.168","bal_acc":"0.571 ± 0.061","mcc":"0.145 ± 0.131","recall":"0.199 ± 0.120","specificity":"0.943 ± 0.023","accuracy":"0.893 ± 0.023","waktu (s)":4.3},{"Keterangan":"CatBoost","pr_auc":"0.180 ± 0.041","roc_auc":"0.690 ± 0.046","g_mean":"0.156 ± 0.161","bal_acc":"0.520 ± 0.027","mcc":"0.072 ± 0.099","recall":"0.051 ± 0.056","specificity":"0.990 ± 0.005","accuracy":"0.928 ± 0.005","waktu (s)":45.4},{"Keterangan":"LDA (shrinkage)","pr_auc":"0.179 ± 0.061","roc_auc":"0.679 ± 0.046","g_mean":"0.552 ± 0.092","bal_acc":"0.607 ± 0.056","mcc":"0.141 ± 0.076","recall":"0.372 ± 0.109","specificity":"0.841 ± 0.025","accuracy":"0.810 ± 0.025","waktu (s)":2.1},{"Keterangan":"Logistic Regression (L2)","pr_auc":"0.179 ± 0.060","roc_auc":"0.668 ± 0.050","g_mean":"0.539 ± 0.091","bal_acc":"0.599 ± 0.055","mcc":"0.132 ± 0.072","recall":"0.353 ± 0.109","specificity":"0.845 ± 0.019","accuracy":"0.812 ± 0.019","waktu (s)":1.9},{"Keterangan":"Linear SVM","pr_auc":"0.178 ± 0.059","roc_auc":"0.667 ± 0.050","g_mean":"0.600 ± 0.059","bal_acc":"0.616 ± 0.044","mcc":"0.129 ± 0.049","recall":"0.493 ± 0.088","specificity":"0.738 ± 0.019","accuracy":"0.722 ± 0.018","waktu (s)":2.0},{"Keterangan":"SVM RBF","pr_auc":"0.172 ± 0.042","roc_auc":"0.667 ± 0.053","g_mean":"0.172 ± 0.145","bal_acc":"0.522 ± 0.024","mcc":"0.100 ± 0.113","recall":"0.051 ± 0.047","specificity":"0.992 ± 0.004","accuracy":"0.930 ± 0.005","waktu (s)":2.6},{"Keterangan":"HistGradientBoosting","pr_auc":"0.171 ± 0.041","roc_auc":"0.659 ± 0.047","g_mean":"0.050 ± 0.100","bal_acc":"0.505 ± 0.013","mcc":"0.042 ± 0.100","recall":"0.013 ± 0.025","specificity":"0.998 ± 0.003","accuracy":"0.933 ± 0.004","waktu (s)":28.3},{"Keterangan":"RUSBoost","pr_auc":"0.118 ± 0.034","roc_auc":"0.635 ± 0.076","g_mean":"0.426 ± 0.185","bal_acc":"0.555 ± 0.052","mcc":"0.068 ± 0.070","recall":"0.272 ± 0.171","specificity":"0.838 ± 0.081","accuracy":"0.801 ± 0.066","waktu (s)":2.1},{"Keterangan":"KNN (k=15) + SMOTE","pr_auc":"0.104 ± 0.026","roc_auc":"0.621 ± 0.086","g_mean":"0.324 ± 0.023","bal_acc":"0.519 ± 0.026","mcc":"0.029 ± 0.041","recall":"0.923 ± 0.049","specificity":"0.114 ± 0.014","accuracy":"0.168 ± 0.014","waktu (s)":2.3},{"Keterangan":"Decision Tree","pr_auc":"0.102 ± 0.048","roc_auc":"0.570 ± 0.056","g_mean":"0.502 ± 0.103","bal_acc":"0.571 ± 0.055","mcc":"0.090 ± 0.073","recall":"0.332 ± 0.136","specificity":"0.809 ± 0.073","accuracy":"0.778 ± 0.064","waktu (s)":2.8},{"Keterangan":"AdaBoost (stump berbobot)","pr_auc":"0.098 ± 0.015","roc_auc":"0.632 ± 0.047","g_mean":"0.501 ± 0.202","bal_acc":"0.589 ± 0.074","mcc":"0.095 ± 0.084","recall":"0.398 ± 0.225","specificity":"0.779 ± 0.088","accuracy":"0.754 ± 0.069","waktu (s)":2.6},{"Keterangan":"Gaussian Naive Bayes","pr_auc":"0.095 ± 0.020","roc_auc":"0.567 ± 0.061","g_mean":"0.513 ± 0.056","bal_acc":"0.543 ± 0.049","mcc":"0.045 ± 0.050","recall":"0.661 ± 0.136","specificity":"0.424 ± 0.142","accuracy":"0.440 ± 0.126","waktu (s)":1.9},{"Keterangan":"Dummy: acak stratified","pr_auc":"0.074 ± 0.019","roc_auc":"0.498 ± 0.044","g_mean":"0.134 ± 0.177","bal_acc":"0.498 ± 0.044","mcc":"-0.005 ± 0.095","recall":"0.052 ± 0.082","specificity":"0.944 ± 0.006","accuracy":"0.885 ± 0.011","waktu (s)":1.8},{"Keterangan":"Dummy: selalu Pass","pr_auc":"0.066 ± 0.002","roc_auc":"0.500 ± 0.000","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":1.9}],"resampling":[{"Keterangan":"ADASYN","LogReg · accuracy":0.82,"LogReg · g_mean":0.543,"LogReg · pr_auc":0.166,"LogReg · recall":0.353,"LogReg · roc_auc":0.66,"LogReg · specificity":0.854,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.076,"ExtraTrees · pr_auc":0.199,"ExtraTrees · recall":0.019,"ExtraTrees · roc_auc":0.706,"ExtraTrees · specificity":1.0},{"Keterangan":"Borderline-SMOTE","LogReg · accuracy":0.848,"LogReg · g_mean":0.484,"LogReg · pr_auc":0.163,"LogReg · recall":0.274,"LogReg · roc_auc":0.644,"LogReg · specificity":0.888,"ExtraTrees · accuracy":0.933,"ExtraTrees · g_mean":0.051,"ExtraTrees · pr_auc":0.2,"ExtraTrees · recall":0.013,"ExtraTrees · roc_auc":0.705,"ExtraTrees · specificity":0.999},{"Keterangan":"Class weight","LogReg · accuracy":0.812,"LogReg · g_mean":0.539,"LogReg · pr_auc":0.179,"LogReg · recall":0.353,"LogReg · roc_auc":0.668,"LogReg · specificity":0.845,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.0,"ExtraTrees · pr_auc":0.223,"ExtraTrees · recall":0.0,"ExtraTrees · roc_auc":0.749,"ExtraTrees · specificity":1.0},{"Keterangan":"Random over-sampling","LogReg · accuracy":0.823,"LogReg · g_mean":0.509,"LogReg · pr_auc":0.175,"LogReg · recall":0.308,"LogReg · roc_auc":0.664,"LogReg · specificity":0.86,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.0,"ExtraTrees · pr_auc":0.222,"ExtraTrees · recall":0.0,"ExtraTrees · roc_auc":0.753,"ExtraTrees · specificity":1.0},{"Keterangan":"Random under-sampling","LogReg · accuracy":0.653,"LogReg · g_mean":0.628,"LogReg · pr_auc":0.159,"LogReg · recall":0.603,"LogReg · roc_auc":0.661,"LogReg · specificity":0.656,"ExtraTrees · accuracy":0.682,"ExtraTrees · g_mean":0.664,"ExtraTrees · pr_auc":0.188,"ExtraTrees · recall":0.648,"ExtraTrees · roc_auc":0.713,"ExtraTrees · specificity":0.684},{"Keterangan":"SMOTE","LogReg · accuracy":0.829,"LogReg · g_mean":0.531,"LogReg · pr_auc":0.175,"LogReg · recall":0.333,"LogReg · roc_auc":0.657,"LogReg · specificity":0.864,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.076,"ExtraTrees · pr_auc":0.206,"ExtraTrees · recall":0.019,"ExtraTrees · roc_auc":0.722,"ExtraTrees · specificity":0.999},{"Keterangan":"SMOTE-ENN","LogReg · accuracy":0.38,"LogReg · g_mean":0.532,"LogReg · pr_auc":0.163,"LogReg · recall":0.82,"LogReg · roc_auc":0.65,"LogReg · specificity":0.348,"ExtraTrees · accuracy":0.531,"ExtraTrees · g_mean":0.6,"ExtraTrees · pr_auc":0.183,"ExtraTrees · recall":0.71,"ExtraTrees · roc_auc":0.665,"ExtraTrees · specificity":0.518},{"Keterangan":"SMOTE-Tomek","LogReg · accuracy":0.829,"LogReg · g_mean":0.531,"LogReg · pr_auc":0.175,"LogReg · recall":0.333,"LogReg · roc_auc":0.657,"LogReg · specificity":0.864,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.076,"ExtraTrees · pr_auc":0.206,"ExtraTrees · recall":0.019,"ExtraTrees · roc_auc":0.722,"ExtraTrees · specificity":0.999},{"Keterangan":"Tanpa penanganan","LogReg · accuracy":0.928,"LogReg · g_mean":0.061,"LogReg · pr_auc":0.189,"LogReg · recall":0.019,"LogReg · roc_auc":0.686,"LogReg · specificity":0.992,"ExtraTrees · accuracy":0.934,"ExtraTrees · g_mean":0.0,"ExtraTrees · pr_auc":0.218,"ExtraTrees · recall":0.0,"ExtraTrees · roc_auc":0.739,"ExtraTrees · specificity":1.0}],"feature_selection":[{"Keterangan":"ANOVA F (k=100)","LogReg · pr_auc":0.179,"LogReg · pr_auc_sd":0.049,"LogReg · roc_auc":0.668,"LogReg · time_s":1.757,"ExtraTrees · pr_auc":0.211,"ExtraTrees · pr_auc_sd":0.082,"ExtraTrees · roc_auc":0.74,"ExtraTrees · time_s":6.286},{"Keterangan":"ANOVA F (k=20)","LogReg · pr_auc":0.155,"LogReg · pr_auc_sd":0.061,"LogReg · roc_auc":0.665,"LogReg · time_s":1.927,"ExtraTrees · pr_auc":0.193,"ExtraTrees · pr_auc_sd":0.097,"ExtraTrees · roc_auc":0.688,"ExtraTrees · time_s":5.437},{"Keterangan":"ANOVA F (k=50)","LogReg · pr_auc":0.157,"LogReg · pr_auc_sd":0.049,"LogReg · roc_auc":0.661,"LogReg · time_s":1.849,"ExtraTrees · pr_auc":0.205,"ExtraTrees · pr_auc_sd":0.088,"ExtraTrees · roc_auc":0.72,"ExtraTrees · time_s":5.941},{"Keterangan":"L1-logistic (embedded)","LogReg · pr_auc":0.187,"LogReg · pr_auc_sd":0.061,"LogReg · roc_auc":0.683,"LogReg · time_s":2.195,"ExtraTrees · pr_auc":0.222,"ExtraTrees · pr_auc_sd":0.095,"ExtraTrees · roc_auc":0.741,"ExtraTrees · time_s":6.715},{"Keterangan":"Mutual information (k=50)","LogReg · pr_auc":0.146,"LogReg · pr_auc_sd":0.047,"LogReg · roc_auc":0.644,"LogReg · time_s":9.32,"ExtraTrees · pr_auc":0.181,"ExtraTrees · pr_auc_sd":0.056,"ExtraTrees · roc_auc":0.718,"ExtraTrees · time_s":13.604},{"Keterangan":"PCA (95% varians)","LogReg · pr_auc":0.173,"LogReg · pr_auc_sd":0.049,"LogReg · roc_auc":0.667,"LogReg · time_s":2.092,"ExtraTrees · pr_auc":0.137,"ExtraTrees · pr_auc_sd":0.029,"ExtraTrees · roc_auc":0.657,"ExtraTrees · time_s":7.283},{"Keterangan":"RF importance (top 50)","LogReg · pr_auc":0.167,"LogReg · pr_auc_sd":0.059,"LogReg · roc_auc":0.664,"LogReg · time_s":13.015,"ExtraTrees · pr_auc":0.196,"ExtraTrees · pr_auc_sd":0.068,"ExtraTrees · roc_auc":0.717,"ExtraTrees · time_s":18.146},{"Keterangan":"Semua fitur (setelah cleaning)","LogReg · pr_auc":0.179,"LogReg · pr_auc_sd":0.06,"LogReg · roc_auc":0.668,"LogReg · time_s":1.8,"ExtraTrees · pr_auc":0.223,"ExtraTrees · pr_auc_sd":0.083,"ExtraTrees · roc_auc":0.749,"ExtraTrees · time_s":7.699}],"top_models":[{"Keterangan":"Extra Trees","pr_auc":"0.223 ± 0.083","roc_auc":"0.749 ± 0.031","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":8.0},{"Keterangan":"Easy Ensemble","pr_auc":"0.219 ± 0.079","roc_auc":"0.712 ± 0.053","g_mean":"0.632 ± 0.053","bal_acc":"0.635 ± 0.050","mcc":"0.140 ± 0.051","recall":"0.615 ± 0.106","specificity":"0.655 ± 0.028","accuracy":"0.652 ± 0.025","waktu (s)":19.6},{"Keterangan":"Balanced Random Forest","pr_auc":"0.217 ± 0.071","roc_auc":"0.735 ± 0.034","g_mean":"0.469 ± 0.067","bal_acc":"0.584 ± 0.038","mcc":"0.158 ± 0.083","recall":"0.243 ± 0.068","specificity":"0.924 ± 0.033","accuracy":"0.879 ± 0.031","waktu (s)":8.8},{"Keterangan":"Extra Trees (tuned)","pr_auc":"0.217 ± 0.076","roc_auc":"0.746 ± 0.043","g_mean":"0.000 ± 0.000","bal_acc":"0.499 ± 0.001","mcc":"-0.004 ± 0.008","recall":"0.000 ± 0.000","specificity":"0.999 ± 0.003","accuracy":"0.932 ± 0.003","waktu (s)":9.2},{"Keterangan":"Stacking (ET+LGBM+LR → LR)","pr_auc":"0.213 ± 0.067","roc_auc":"0.710 ± 0.047","g_mean":"0.629 ± 0.043","bal_acc":"0.633 ± 0.038","mcc":"0.141 ± 0.040","recall":"0.583 ± 0.084","specificity":"0.683 ± 0.037","accuracy":"0.677 ± 0.032","waktu (s)":48.0},{"Keterangan":"Random Forest","pr_auc":"0.211 ± 0.066","roc_auc":"0.733 ± 0.048","g_mean":"0.000 ± 0.000","bal_acc":"0.500 ± 0.000","mcc":"0.000 ± 0.000","recall":"0.000 ± 0.000","specificity":"1.000 ± 0.000","accuracy":"0.934 ± 0.002","waktu (s)":18.1},{"Keterangan":"Soft Voting (ET+LGBM+CatBoost+LR)","pr_auc":"0.208 ± 0.060","roc_auc":"0.712 ± 0.039","g_mean":"0.202 ± 0.217","bal_acc":"0.538 ± 0.054","mcc":"0.107 ± 0.149","recall":"0.090 ± 0.113","specificity":"0.987 ± 0.006","accuracy":"0.928 ± 0.006","waktu (s)":60.9},{"Keterangan":"LightGBM (tuned)","pr_auc":"0.207 ± 0.071","roc_auc":"0.702 ± 0.041","g_mean":"0.229 ± 0.190","bal_acc":"0.539 ± 0.038","mcc":"0.130 ± 0.133","recall":"0.090 ± 0.077","specificity":"0.988 ± 0.004","accuracy":"0.929 ± 0.005","waktu (s)":7.2},{"Keterangan":"XGBoost","pr_auc":"0.194 ± 0.061","roc_auc":"0.702 ± 0.042","g_mean":"0.107 ± 0.164","bal_acc":"0.517 ± 0.030","mcc":"0.082 ± 0.152","recall":"0.038 ± 0.059","specificity":"0.995 ± 0.005","accuracy":"0.932 ± 0.007","waktu (s)":17.6},{"Keterangan":"Logistic Regression (L1)","pr_auc":"0.189 ± 0.063","roc_auc":"0.689 ± 0.060","g_mean":"0.611 ± 0.078","bal_acc":"0.636 ± 0.058","mcc":"0.162 ± 0.070","recall":"0.480 ± 0.115","specificity":"0.791 ± 0.024","accuracy":"0.771 ± 0.023","waktu (s)":2.2}],"significance":[{"Keterangan":"Easy Ensemble","Δ PR-AUC":0.0033,"t terkoreksi":0.0709,"p":0.945},{"Keterangan":"Balanced Random Forest","Δ PR-AUC":0.0054,"t terkoreksi":0.3125,"p":0.7618},{"Keterangan":"Extra Trees (tuned)","Δ PR-AUC":0.0055,"t terkoreksi":0.3318,"p":0.7477},{"Keterangan":"Stacking (ET+LGBM+LR → LR)","Δ PR-AUC":0.0096,"t terkoreksi":0.3317,"p":0.7477},{"Keterangan":"Random Forest","Δ PR-AUC":0.0119,"t terkoreksi":0.3668,"p":0.7223},{"Keterangan":"Soft Voting (ET+LGBM+CatBoost+LR)","Δ PR-AUC":0.0144,"t terkoreksi":0.467,"p":0.6516},{"Keterangan":"LightGBM (tuned)","Δ PR-AUC":0.0155,"t terkoreksi":0.4342,"p":0.6744},{"Keterangan":"Logistic Regression (L2)","Δ PR-AUC":0.0437,"t terkoreksi":0.8224,"p":0.4321}],"threshold_oof_train":[{"Keterangan":"G-mean maks. (UTAMA)","threshold":0.137,"sensitivity":0.654,"specificity":0.727,"precision":0.146,"g_mean":0.69,"bal_acc":0.691,"mcc":0.208,"f2":0.385,"accuracy":0.723},{"Keterangan":"Balanced acc. / Youden maks.","threshold":0.137,"sensitivity":0.654,"specificity":0.727,"precision":0.146,"g_mean":0.69,"bal_acc":0.691,"mcc":0.208,"f2":0.385,"accuracy":0.723},{"Keterangan":"MCC maks.","threshold":0.193,"sensitivity":0.372,"specificity":0.923,"precision":0.257,"g_mean":0.586,"bal_acc":0.648,"mcc":0.249,"f2":0.341,"accuracy":0.887},{"Keterangan":"F2 maks.","threshold":0.15,"sensitivity":0.59,"specificity":0.787,"precision":0.164,"g_mean":0.681,"bal_acc":0.688,"mcc":0.22,"f2":0.389,"accuracy":0.774},{"Keterangan":"Sens. maks. dgn akurasi ≥ 90%","threshold":0.217,"sensitivity":0.244,"specificity":0.953,"precision":0.268,"g_mean":0.482,"bal_acc":0.598,"mcc":0.205,"f2":0.248,"accuracy":0.906},{"Keterangan":"Default","threshold":0.5,"sensitivity":0.0,"specificity":1.0,"precision":0.0,"g_mean":0.0,"bal_acc":0.5,"mcc":0.0,"f2":0.0,"accuracy":0.934}],"test_ci":[{"Keterangan":"pr_auc","estimasi":0.24,"CI95_bawah":0.134,"CI95_atas":0.394,"baseline \\"selalu Pass\\"":0.066},{"Keterangan":"roc_auc","estimasi":0.798,"CI95_bawah":0.717,"CI95_atas":0.875,"baseline \\"selalu Pass\\"":0.5},{"Keterangan":"sensitivity","estimasi":0.808,"CI95_bawah":0.654,"CI95_atas":0.955,"baseline \\"selalu Pass\\"":0.0},{"Keterangan":"specificity","estimasi":0.708,"CI95_bawah":0.663,"CI95_atas":0.753,"baseline \\"selalu Pass\\"":1.0},{"Keterangan":"precision","estimasi":0.164,"CI95_bawah":0.102,"CI95_atas":0.232,"baseline \\"selalu Pass\\"":0.0},{"Keterangan":"g_mean","estimasi":0.756,"CI95_bawah":0.678,"CI95_atas":0.824,"baseline \\"selalu Pass\\"":0.0},{"Keterangan":"bal_acc","estimasi":0.758,"CI95_bawah":0.678,"CI95_atas":0.832,"baseline \\"selalu Pass\\"":0.5},{"Keterangan":"mcc","estimasi":0.273,"CI95_bawah":0.179,"CI95_atas":0.362,"baseline \\"selalu Pass\\"":0.0},{"Keterangan":"f2","estimasi":0.453,"CI95_bawah":0.327,"CI95_atas":0.562,"baseline \\"selalu Pass\\"":0.0},{"Keterangan":"accuracy","estimasi":0.714,"CI95_bawah":0.671,"CI95_atas":0.758,"baseline \\"selalu Pass\\"":0.934}],"threshold_test":[{"Keterangan":"G-mean maks. (UTAMA)","threshold":0.137,"TP":21.0,"FN":5.0,"FP":107.0,"TN":259.0,"sensitivity":0.808,"specificity":0.708,"precision":0.164,"NPV":0.981,"g_mean":0.756,"bal_acc":0.758,"mcc":0.273,"f2":0.453,"accuracy":0.714},{"Keterangan":"Balanced acc. / Youden maks.","threshold":0.137,"TP":21.0,"FN":5.0,"FP":107.0,"TN":259.0,"sensitivity":0.808,"specificity":0.708,"precision":0.164,"NPV":0.981,"g_mean":0.756,"bal_acc":0.758,"mcc":0.273,"f2":0.453,"accuracy":0.714},{"Keterangan":"MCC maks.","threshold":0.193,"TP":6.0,"FN":20.0,"FP":31.0,"TN":335.0,"sensitivity":0.231,"specificity":0.915,"precision":0.162,"NPV":0.944,"g_mean":0.46,"bal_acc":0.573,"mcc":0.124,"f2":0.213,"accuracy":0.87},{"Keterangan":"F2 maks.","threshold":0.15,"TP":19.0,"FN":7.0,"FP":76.0,"TN":290.0,"sensitivity":0.731,"specificity":0.792,"precision":0.2,"NPV":0.976,"g_mean":0.761,"bal_acc":0.762,"mcc":0.304,"f2":0.477,"accuracy":0.788},{"Keterangan":"Sens. maks. dgn akurasi ≥ 90%","threshold":0.217,"TP":5.0,"FN":21.0,"FP":17.0,"TN":349.0,"sensitivity":0.192,"specificity":0.954,"precision":0.227,"NPV":0.943,"g_mean":0.428,"bal_acc":0.573,"mcc":0.158,"f2":0.198,"accuracy":0.903},{"Keterangan":"Default","threshold":0.5,"TP":0.0,"FN":26.0,"FP":0.0,"TN":366.0,"sensitivity":0.0,"specificity":1.0,"precision":0.0,"NPV":0.934,"g_mean":0.0,"bal_acc":0.5,"mcc":0.0,"f2":0.0,"accuracy":0.934}],"cost":[{"Keterangan":"5 : 1","threshold":0.193,"biaya/wafer model (test)":0.334,"biaya/wafer \\"selalu Pass\\"":0.332,"biaya/wafer \\"periksa semua\\"":0.934,"sensitivitas":0.231,"spesifisitas":0.915,"penghematan vs strategi terbaik tanpa model":-0.008},{"Keterangan":"10 : 1","threshold":0.15,"biaya/wafer model (test)":0.372,"biaya/wafer \\"selalu Pass\\"":0.663,"biaya/wafer \\"periksa semua\\"":0.934,"sensitivitas":0.731,"spesifisitas":0.792,"penghematan vs strategi terbaik tanpa model":0.438},{"Keterangan":"20 : 1","threshold":0.105,"biaya/wafer model (test)":0.617,"biaya/wafer \\"selalu Pass\\"":1.327,"biaya/wafer \\"periksa semua\\"":0.934,"sensitivitas":0.885,"spesifisitas":0.503,"penghematan vs strategi terbaik tanpa model":0.339},{"Keterangan":"50 : 1","threshold":0.079,"biaya/wafer model (test)":0.844,"biaya/wafer \\"selalu Pass\\"":3.316,"biaya/wafer \\"periksa semua\\"":0.934,"sensitivitas":0.962,"spesifisitas":0.232,"penghematan vs strategi terbaik tanpa model":0.096}],"chronological":[{"Keterangan":"pr_auc","Split acak stratified":0.24,"Split kronologis":0.074},{"Keterangan":"roc_auc","Split acak stratified":0.798,"Split kronologis":0.57},{"Keterangan":"sensitivity","Split acak stratified":0.808,"Split kronologis":0.083},{"Keterangan":"specificity","Split acak stratified":0.708,"Split kronologis":0.872},{"Keterangan":"g_mean","Split acak stratified":0.756,"Split kronologis":0.27},{"Keterangan":"bal_acc","Split acak stratified":0.758,"Split kronologis":0.478},{"Keterangan":"mcc","Split acak stratified":0.273,"Split kronologis":-0.032},{"Keterangan":"accuracy","Split acak stratified":0.714,"Split kronologis":0.824},{"Keterangan":"prevalensi Fail test","Split acak stratified":0.066,"Split kronologis":0.061}],"shap":[{"Keterangan":"f59","mean|SHAP|":0.2501,"perm_ΔPR-AUC":0.0566,"perm_sd":0.0127,"rank_SHAP":1,"rank_perm":1,"rank_MWU":2.0},{"Keterangan":"f33","mean|SHAP|":0.2477,"perm_ΔPR-AUC":0.0248,"perm_sd":0.0191,"rank_SHAP":2,"rank_perm":2,"rank_MWU":11.0},{"Keterangan":"f103","mean|SHAP|":0.1944,"perm_ΔPR-AUC":0.0156,"perm_sd":0.0078,"rank_SHAP":3,"rank_perm":4,"rank_MWU":1.0},{"Keterangan":"f205","mean|SHAP|":0.1703,"perm_ΔPR-AUC":0.0219,"perm_sd":0.0154,"rank_SHAP":4,"rank_perm":3,"rank_MWU":7.0},{"Keterangan":"f21","mean|SHAP|":0.1703,"perm_ΔPR-AUC":0.0081,"perm_sd":0.0102,"rank_SHAP":5,"rank_perm":11,"rank_MWU":10.0},{"Keterangan":"f130","mean|SHAP|":0.1463,"perm_ΔPR-AUC":0.01,"perm_sd":0.0132,"rank_SHAP":6,"rank_perm":7,"rank_MWU":73.0},{"Keterangan":"f213","mean|SHAP|":0.1422,"perm_ΔPR-AUC":0.0062,"perm_sd":0.015,"rank_SHAP":7,"rank_perm":15,"rank_MWU":37.0},{"Keterangan":"f183","mean|SHAP|":0.1291,"perm_ΔPR-AUC":-0.0034,"perm_sd":0.0124,"rank_SHAP":8,"rank_perm":262,"rank_MWU":30.0},{"Keterangan":"f175","mean|SHAP|":0.1267,"perm_ΔPR-AUC":-0.0157,"perm_sd":0.0105,"rank_SHAP":9,"rank_perm":269,"rank_MWU":31.0},{"Keterangan":"f81","mean|SHAP|":0.12,"perm_ΔPR-AUC":-0.0083,"perm_sd":0.0061,"rank_SHAP":10,"rank_perm":266,"rank_MWU":61.0},{"Keterangan":"f247","mean|SHAP|":0.1171,"perm_ΔPR-AUC":0.0082,"perm_sd":0.0116,"rank_SHAP":11,"rank_perm":10,"rank_MWU":3.0},{"Keterangan":"f488","mean|SHAP|":0.1076,"perm_ΔPR-AUC":0.001,"perm_sd":0.008,"rank_SHAP":12,"rank_perm":91,"rank_MWU":114.0},{"Keterangan":"f31","mean|SHAP|":0.1004,"perm_ΔPR-AUC":0.0009,"perm_sd":0.0079,"rank_SHAP":13,"rank_perm":98,"rank_MWU":297.0},{"Keterangan":"f86","mean|SHAP|":0.1002,"perm_ΔPR-AUC":-0.0089,"perm_sd":0.0053,"rank_SHAP":14,"rank_perm":267,"rank_MWU":115.0},{"Keterangan":"f587","mean|SHAP|":0.0938,"perm_ΔPR-AUC":0.0131,"perm_sd":0.0074,"rank_SHAP":15,"rank_perm":5,"rank_MWU":62.0}],"anomaly":[{"Keterangan":"Hotelling T² (PCA)","ROC-AUC":0.573,"PR-AUC":0.091,"sensitivitas @batas":0.038,"false alarm @batas":0.066,"G-mean @batas":0.19},{"Keterangan":"SPE / Q (PCA)","ROC-AUC":0.604,"PR-AUC":0.103,"sensitivitas @batas":0.115,"false alarm @batas":0.085,"G-mean @batas":0.325},{"Keterangan":"T² ATAU SPE","ROC-AUC":0.613,"PR-AUC":0.1,"sensitivitas @batas":0.115,"false alarm @batas":0.107,"G-mean @batas":0.321},{"Keterangan":"Isolation Forest","ROC-AUC":0.612,"PR-AUC":0.142,"sensitivitas @batas":0.077,"false alarm @batas":0.003,"G-mean @batas":0.277},{"Keterangan":"LOF (novelty)","ROC-AUC":0.605,"PR-AUC":0.107,"sensitivitas @batas":0.0,"false alarm @batas":0.019,"G-mean @batas":0.0},{"Keterangan":"Supervised: Extra Trees","ROC-AUC":0.798,"PR-AUC":0.24,"sensitivitas @batas":0.808,"false alarm @batas":0.292,"G-mean @batas":0.756}],"leakage":[{"Keterangan":"pr_auc","❌ Bocor (SMOTE + seleksi sebelum split)":0.998,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.24},{"Keterangan":"roc_auc","❌ Bocor (SMOTE + seleksi sebelum split)":0.998,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.798},{"Keterangan":"sensitivity","❌ Bocor (SMOTE + seleksi sebelum split)":0.986,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.808},{"Keterangan":"specificity","❌ Bocor (SMOTE + seleksi sebelum split)":0.975,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.708},{"Keterangan":"g_mean","❌ Bocor (SMOTE + seleksi sebelum split)":0.981,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.756},{"Keterangan":"bal_acc","❌ Bocor (SMOTE + seleksi sebelum split)":0.981,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.758},{"Keterangan":"mcc","❌ Bocor (SMOTE + seleksi sebelum split)":0.962,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.273},{"Keterangan":"accuracy","❌ Bocor (SMOTE + seleksi sebelum split)":0.981,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.714},{"Keterangan":"prevalensi Fail di test","❌ Bocor (SMOTE + seleksi sebelum split)":0.5,"✅ Benar (pipeline, G-mean maks. (UTAMA))":0.066}],"summary":[{"Keterangan":"Model final","Nilai":"Extra Trees"},{"Keterangan":"PR-AUC CV (5×2)","Nilai":"0.223 ± 0.083"},{"Keterangan":"PR-AUC test [CI95]","Nilai":"0.240 [0.134, 0.394]"},{"Keterangan":"ROC-AUC test [CI95]","Nilai":"0.798 [0.717, 0.875]"},{"Keterangan":"Sensitivitas test [CI95]","Nilai":"0.808 [0.654, 0.955]"},{"Keterangan":"Spesifisitas test [CI95]","Nilai":"0.708 [0.663, 0.753]"},{"Keterangan":"G-mean test [CI95]","Nilai":"0.756 [0.678, 0.824]"},{"Keterangan":"MCC test [CI95]","Nilai":"0.273 [0.179, 0.362]"},{"Keterangan":"Akurasi test (NIR)","Nilai":"0.714 (0.934)"}],"sensor_univariate":[{"Keterangan":"f103","p_MWU":0.0,"AUC_tunggal":0.6779,"|AUC−0.5|":0.1779,"q_FDR":0.0001},{"Keterangan":"f59","p_MWU":0.0,"AUC_tunggal":0.6694,"|AUC−0.5|":0.1694,"q_FDR":0.0001},{"Keterangan":"f247","p_MWU":0.0,"AUC_tunggal":0.6699,"|AUC−0.5|":0.1699,"q_FDR":0.005},{"Keterangan":"f510","p_MWU":0.0,"AUC_tunggal":0.6375,"|AUC−0.5|":0.1375,"q_FDR":0.005},{"Keterangan":"f519","p_MWU":0.0001,"AUC_tunggal":0.6687,"|AUC−0.5|":0.1687,"q_FDR":0.005},{"Keterangan":"f477","p_MWU":0.0001,"AUC_tunggal":0.6354,"|AUC−0.5|":0.1354,"q_FDR":0.005},{"Keterangan":"f205","p_MWU":0.0001,"AUC_tunggal":0.6332,"|AUC−0.5|":0.1332,"q_FDR":0.0056},{"Keterangan":"f341","p_MWU":0.0003,"AUC_tunggal":0.6236,"|AUC−0.5|":0.1236,"q_FDR":0.0155},{"Keterangan":"f95","p_MWU":0.0005,"AUC_tunggal":0.6112,"|AUC−0.5|":0.1112,"q_FDR":0.0233},{"Keterangan":"f21","p_MWU":0.0005,"AUC_tunggal":0.6179,"|AUC−0.5|":0.1179,"q_FDR":0.0233},{"Keterangan":"f33","p_MWU":0.0006,"AUC_tunggal":0.6167,"|AUC−0.5|":0.1167,"q_FDR":0.0243},{"Keterangan":"f385","p_MWU":0.0008,"AUC_tunggal":0.6395,"|AUC−0.5|":0.1395,"q_FDR":0.033}]}')
+
+
+
+def nb_table(key: str) -> pd.DataFrame:
+    return pd.DataFrame(NOTEBOOK_RESULTS[key].copy())
+
+
+def display_nb_table(key: str, *, title: str = '', help_text: str = '', height: int = 430) -> None:
+    if title: subheading(title, help_text)
+    st.dataframe(nb_table(key), use_container_width=True, hide_index=True, height=height)
+    with st.expander('Sumber angka & unduh tabel ini', expanded=False):
+        st.caption('Nilai tabel disalin dari OUTPUT notebook Google Colab (bukan dihitung ulang saat dashboard dibuka).')
+        st.download_button('Unduh tabel sesuai Colab (.csv)',
+                           data=nb_table(key).to_csv(index=False).encode('utf-8-sig'),
+                           file_name=f'secom_colab_{key}.csv', mime='text/csv', key=f'csv_{key}')
+
+
+def cv_mean(text):
+    try:
+        return float(str(text).split('±')[0].strip())
+    except (TypeError,ValueError):
+        return float('nan')
+
+
+def df_models() -> pd.DataFrame:
+    df=nb_table('screening')
+    df=df[~df['Keterangan'].astype(str).str.startswith('Dummy:')].copy()
+    df=df.rename(columns={'Keterangan':'Model'})
+    # The 19 reported classifier scores remain the same as in Google Colab.
+    return df
+
+
+def df_operating() -> pd.DataFrame:
+    return nb_table('threshold_test').rename(columns={
+        'Keterangan':'Strategi','threshold':'Threshold',
+        'sensitivity':'Sensitivitas','specificity':'Spesifisitas',
+        'precision':'Presisi','g_mean':'G-mean','bal_acc':'Balanced accuracy',
+        'mcc':'MCC','f2':'F2','accuracy':'Akurasi',
+    })
+
+
+def nb_metric(key: str) -> dict:
+    ci=nb_table('test_ci')
+    return ci.set_index('Keterangan').loc[key].to_dict()
+
+
+def plot_horizontal(df:pd.DataFrame,label_col:str,value_col:str,selected:str|None=None,height:int|None=None) -> None:
+    d=df.sort_values(value_col)
+    colors=[BLUE if label==selected else '#86AADF' for label in d[label_col]]
+    fig=go.Figure(go.Bar(y=d[label_col],x=d[value_col],orientation='h',
+                         marker_color=colors,text=[f'{float(x):.3f}' for x in d[value_col]],
+                         textposition='outside'))
+    mx=max(0.001,float(d[value_col].max()))
+    fig.update_layout(**base_chart(height or max(300,len(d)*37+65),dict(l=10,r=55,t=15,b=32)),
+                      xaxis=dict(range=[0,min(1.05,mx*1.30)],gridcolor='#E5EDF6'),
+                      yaxis=dict(automargin=True),showlegend=False)
+    show_chart(fig)
+
+
+NAV=[
+    '📊 Ringkasan',
+    '🧪 Kualitas & Preprocessing',
+    '🏆 Perbandingan Model',
+    '⚙️ Resampling & Tuning',
+    '🎯 Evaluasi & Threshold',
+    '📈 Drift & Biaya',
+    '🔬 Sensor & Anomali',
+    '📚 Kesimpulan & Sumber',
+]
+
 with st.sidebar:
-    st.markdown("""
+    st.markdown('''
     <div style="padding:17px 4px 8px;display:flex;align-items:center;gap:12px;">
       <div style="border-radius:12px;padding:10px 12px;background:#EAF1FF;color:#2C63D2;font-size:24px;">◈</div>
       <div><div style="font-weight:800;font-size:1.04rem;color:#153656;">SECOM Insight</div>
-      <div style="font-size:.72rem;color:#8493A7;">Wafer Quality Analytics</div></div>
+      <div style="font-size:.72rem;color:#506984;">Wafer Quality Analytics</div></div>
     </div><hr style="border:0;border-top:1px solid #E8EDF5;margin:14px 0 9px;">
-    """, unsafe_allow_html=True)
-    st.caption("Tampilan v1.2 · Kontras diperbaiki")
-    selection = st.radio(
-        "NAVIGASI ANALISIS",
-        ["📊 Ringkasan", "🧪 Kualitas Data", "🏆 Perbandingan Model",
-         "🎯 Evaluasi & Threshold", "📈 Drift & Biaya", "🔬 Insight Sensor"],
-        label_visibility="visible", key="secom_navigation",
-    )
+    ''',unsafe_allow_html=True)
+    st.caption('VERSI AKADEMIK · OUTPUT GOOGLE COLAB')
+    selection=st.radio('NAVIGASI ANALISIS',NAV,key='secom_navigation')
     st.divider()
-    st.caption("SUMBER DATA INTERAKTIF (OPSIONAL)")
-    upload = st.file_uploader("Unggah dataset SECOM (.csv)", type=["csv"],
-                              help="Bisa menggunakan data_.csv. File hanya dipakai untuk eksplorasi dan tidak mengubah metrik hasil notebook.")
-    df_upload = None
-    file_path = Path("data_.csv")
+    st.caption('DATA SECOM (OPSIONAL)')
+    upload=st.file_uploader('Unggah data_.csv untuk eksplorasi',type=['csv'],
+                            help='Hanya mengubah EDA dataset yang diunggah; seluruh hasil eksperimen tetap sesuai output notebook.')
+    df_upload=None
+    local_csv=Path('data_.csv')
     if upload is not None:
         try:
-            df_upload = read_uploaded_csv(upload.getvalue())
-            st.success(f"CSV terbaca: {len(df_upload):,} baris")
-        except Exception as exc:
-            st.error(f"CSV tidak dapat dibaca: {exc}")
-    elif file_path.is_file():
+            df_upload=read_uploaded_csv(upload.getvalue())
+            st.success(f'CSV terbaca: {len(df_upload):,} baris')
+        except Exception as exc:st.error(f'Gagal membaca CSV: {exc}')
+    elif local_csv.is_file():
         try:
-            df_upload = read_uploaded_csv(file_path.read_bytes())
-            st.success(f"Membaca data_.csv: {len(df_upload):,} baris")
-        except Exception as exc:
-            st.error(f"Gagal membuka data_.csv: {exc}")
+            df_upload=read_uploaded_csv(local_csv.read_bytes())
+            st.success(f'Data lokal terbaca: {len(df_upload):,} baris')
+        except Exception as exc:st.error(f'Gagal membaca data_.csv: {exc}')
     else:
-        st.info("Dashboard tetap dapat dibuka tanpa dataset. Grafik hasil notebook sudah tersedia.")
+        st.info('Tidak perlu upload CSV untuk melihat hasil Google Colab.')
     st.divider()
-    st.caption("Sumber: notebook SECOM, hasil eksperimen yang sudah dijalankan. **Unggahan CSV tidak melatih ulang model.**")
+    st.caption('Versi 2.0 · Sinkron dengan output Google Colab')
+    st.caption('Angka training, CV, OOF, dan test tidak dicampur. Hasil model merupakan hasil notebook tersimpan, bukan prediksi baru.')
 
 
-if selection == "📊 Ringkasan":
-    hero("OVERVIEW / SEMICONDUCTOR ANALYTICS", "Klasifikasi Kegagalan Wafer", "Ringkasan interaktif eksperimen SECOM: mendeteksi wafer berisiko gagal meskipun kelas Fail hanya sekitar 6,6% dari seluruh pengamatan.")
-    a,b,c,d = st.columns(4, gap="medium")
-    with a: stat("Total wafer", "1.567", "1.463 Pass · 104 Fail")
-    with b: stat("Fitur sensor", "590", "Sinyal proses produksi anonim")
-    with c: stat("Proporsi Fail", "6,64%", "Data sangat tidak seimbang")
-    with d: stat("Model terpilih", "Extra Trees", "PR-AUC CV 0,223 ± 0,083")
-
-    left,right = st.columns([.95,1.4], gap="large")
+if selection == '📊 Ringkasan':
+    hero('RINGKASAN / OUTPUT GOOGLE COLAB', 'Penelitian Klasifikasi Kegagalan Wafer',
+         'Dashboard menyajikan hasil eksperimen yang telah dieksekusi di Google Colab. Setiap metrik dilabeli menurut tahap evaluasinya.')
+    a,b,c,d=st.columns(4)
+    with a:stat('Wafer', '1.567', 'Train 1.175 · Test 392')
+    with b:stat('Sensor awal', '590', '269 fitur akhir setelah cleaning train')
+    with c:stat('Fail di seluruh data', '104 (6,64%)', 'Pass 1.463 (93,36%)')
+    with d:stat('Model final', 'Extra Trees', 'Dipilih dari PR-AUC CV 5×2')
+    left,right=st.columns([.8,1.2],gap='large')
     with left:
-        subheading("Distribusi status wafer", "Jumlah data asli: 1.567 wafer")
-        show_chart(donut_counts(1463, 104))
+        subheading('Distribusi label', 'SECOM dataset · 1.567 wafer')
+        show_chart(donut_counts(1463,104))
     with right:
-        subheading("Kinerja pada test set", "Extra Trees · test stratified 25% · threshold hasil OOF training")
-        p,q,r = st.columns(3)
-        p.metric("PR-AUC", "0,240", "CI95% 0,134–0,394")
-        q.metric("ROC-AUC", "0,798", "CI95% 0,717–0,875")
-        r.metric("Recall Fail", "80,8%", "21/26 Fail tertangkap")
-        st.markdown('<div class="callout"><b>Mengapa akurasi tidak diutamakan?</b> Model yang selalu memprediksi Pass sudah memperoleh akurasi 93,4%, namun gagal mendeteksi seluruh wafer Fail. Oleh sebab itu, penelitian memprioritaskan PR-AUC dan sensitivitas.</div>', unsafe_allow_html=True)
-        panel("Cara membaca hasil", "PR-AUC menunjukkan kemampuan mengurutkan kasus Fail pada kelas yang jarang. ROC-AUC mengukur kemampuan memisahkan Pass dan Fail. Recall menunjukkan berapa banyak wafer Fail yang berhasil terdeteksi.")
+        subheading('Tahap evaluasi tidak boleh tertukar', 'Semua nilai berikut langsung dari notebook')
+        phases=pd.DataFrame({
+            'Metrik':['PR-AUC','ROC-AUC'],
+            'CV 5×2 (mean)':[0.223,0.749],
+            'OOF training':[0.186,0.754],
+            'Test akhir':[0.240,0.798],
+        })
+        st.dataframe(phases,hide_index=True,use_container_width=True,
+                     column_config={c:st.column_config.NumberColumn(c,format='%.3f') for c in phases.columns if c!='Metrik'})
+        panel('Mengapa nilainya tidak sama?',
+              'CV digunakan untuk membandingkan 19 algoritma, OOF training untuk memilih threshold, dan test set untuk mengevaluasi model akhir. Berbeda data dan prosedur, sehingga nilainya tidak identik.')
+        st.markdown('''<div class="callout"><b>PR-AUC adalah metrik utama seleksi model.</b> Pada kelas Fail yang hanya 6,64%, akurasi tinggi bisa menyesatkan. Semua angka CV dihitung pada 5-fold × 2 pengulangan.</div>''',unsafe_allow_html=True)
+    subheading('Hasil test akhir Extra Trees', 'Threshold utama 0,1372 · 392 wafer test, termasuk 26 Fail')
+    ci=nb_table('test_ci').rename(columns={'Keterangan':'Metrik','estimasi':'Estimasi','CI95_bawah':'CI 95% bawah',
+                                           'CI95_atas':'CI 95% atas','baseline "selalu Pass"':'Baseline selalu Pass'})
+    st.dataframe(ci,use_container_width=True,hide_index=True)
+    st.caption('CI 95% menggunakan bootstrap 2.000 replikasi, sesuai notebook. Semua nilai adalah proporsi (misalnya 0,798 = 79,8%).')
+    a,b,c,d=st.columns(4)
+    with a:st.metric('Sensitivitas test','0,808','21 / 26 Fail terdeteksi')
+    with b:st.metric('Spesifisitas test','0,708','259 / 366 Pass tepat')
+    with c:st.metric('Presisi test','0,164','21 benar dari 128 alarm')
+    with d:st.metric('Akurasi test','0,714','NIR test = 0,934')
+    st.markdown('''<div class="callout warning"><b>Kesimpulan utama:</b> Extra Trees dapat membantu memprioritaskan inspeksi tambahan, tetapi 107 alarm palsu dan penurunan performa kronologis membuatnya belum layak menjadi keputusan scrap otomatis.</div>''',unsafe_allow_html=True)
 
-    subheading("Alur penelitian", "Prinsip validasi: tahap yang mempelajari data dilakukan hanya pada data training")
-    steps = [
-        ("01", "Dataset & kualitas", "1.567 wafer, 590 sensor; periksa missing value dan fitur konstan."),
-        ("02", "Split & preprocessing", "Train/test 75:25 stratified; cleaning dan imputasi dalam fold."),
-        ("03", "Seleksi model", "Screening 19 algoritma; pemilihan berdasarkan PR-AUC 5×2 CV."),
-        ("04", "Threshold & evaluasi", "Threshold dari out-of-fold training; evaluasi sekali pada test set."),
-    ]
-    cols = st.columns(4, gap="medium")
-    for col, (idx, name, desc) in zip(cols, steps):
-        with col:
-            panel(f"<span style='color:#2B63DA'>{idx}</span> · {name}", desc)
-    st.markdown('<div class="footer-note">Catatan: seluruh metrik pada halaman ini merupakan hasil eksperimen notebook, bukan hasil perhitungan ulang di dashboard.</div>', unsafe_allow_html=True)
-
-elif selection == "🧪 Kualitas Data":
-    hero("DATA PROFILING / SECOM", "Kualitas Data Sensor", "Pahami pola data hilang, fitur konstan, dan komposisi label sebelum melakukan pemodelan.")
-    if df_upload is None:
-        st.info("Saat ini menggunakan rekap kualitas data dari notebook. Unggah data_.csv di sidebar untuk memeriksa dataset secara langsung.")
-        records = 1567; numeric_features = 590; missing = 4.5375; constant=116; missing_heavy=28
-        class_counts = (1463,104)
-        quality_df = None
-    else:
-        try:
-            X = sensor_numeric(df_upload)
-            records = len(df_upload); numeric_features = len(X.columns)
-            missing = float(X.isna().to_numpy().mean()*100) if len(X.columns) else 0
-            constant = int((X.nunique(dropna=True) <= 1).sum())
-            missing_heavy = int((X.isna().mean() > .5).sum())
-            class_counts = raw_class_counts(df_upload)
-            quality_df = pd.DataFrame({"Sensor":X.columns.astype(str), "Persentase kosong":(X.isna().mean()*100).values,
-                                      "Nilai unik":X.nunique(dropna=True).values})
-        except Exception as exc:
-            st.error(f"Gagal menghitung statistik data: {exc}")
-            st.stop()
-    a,b,c,d = st.columns(4, gap="medium")
-    with a: stat("Jumlah wafer", f"{records:,}".replace(",","."), "Baris dataset")
-    with b: stat("Sensor", str(numeric_features), "Kolom pengukuran")
-    with c: stat("Missing cell", f"{missing:.2f}%".replace(".",","), "Proporsi sel yang kosong")
-    with d: stat("Sensor konstan / kosong", str(constant), f"{missing_heavy} sensor missing > 50%")
-
-    left, right = st.columns([1.05,1], gap="large")
-    with left:
-        subheading("Komposisi kelas", "Label -1 = Pass, 1 = Fail")
-        if class_counts is None:
-            st.warning("CSV tidak memiliki label Pass/Fail valid (-1 dan 1), sehingga distribusi kelas tidak dapat dihitung.")
-        else:
-            show_chart(donut_counts(*class_counts))
-    with right:
-        subheading("Pemeriksaan data", "Ringkasan kualitas penting dari notebook")
-        if df_upload is None:
-            st.dataframe(pd.DataFrame([
-                ("Sensor yang punya missing value", 538),
-                ("Sensor missing > 50%", 28),
-                ("Sensor konstan", 116),
-                ("Sensor dengan ≤ 2 nilai unik", 122),
-                ("Wafer dengan minimal 1 nilai kosong", 1567),
-                ("Baris duplikat", 0),
-            ], columns=["Indikator", "Jumlah"]), use_container_width=True, hide_index=True)
-        else:
-            st.dataframe(pd.DataFrame([
-                ("Sensor yang punya missing value", int((quality_df["Persentase kosong"]>0).sum())),
-                ("Sensor missing > 50%", missing_heavy),
-                ("Sensor konstan / kosong", constant),
-                ("Wafer dengan minimal 1 nilai kosong", int(sensor_numeric(df_upload).isna().any(axis=1).sum())),
-                ("Baris duplikat", int(df_upload.duplicated().sum())),
-            ], columns=["Indikator", "Jumlah"]), use_container_width=True, hide_index=True)
-        panel("Implikasi preprocessing", "Sensor dengan banyak missing value atau tanpa variasi dapat mengganggu model. Notebook membuang fitur yang terlalu kosong / konstan serta mengimputasi data menggunakan median, semuanya hanya berdasarkan training fold.")
-
+elif selection == '🧪 Kualitas & Preprocessing':
+    hero('DATA QUALITY / PREPROCESSING','Kualitas Data dan Persiapan Model',
+         'Ringkasan kualitas data, perbaikan timestamp, pembagian train/test, dan tahapan preprocessing tanpa data leakage.')
+    a,b,c,d=st.columns(4)
+    with a:stat('Missing cell','4,5375%','Dari seluruh 590 kolom sensor')
+    with b:stat('Sensor missing > 50%','28','Statistik deskriptif seluruh dataset')
+    with c:stat('Sensor konstan','116','Hasil pemeriksaan data awal')
+    with d:stat('Baris duplikat','0','Sesuai output kualitas data')
+    display_nb_table('quality',title='Kualitas data asli (Colab Bagian 3)',height=290)
+    st.markdown('''<div class="callout"><b>Perbaikan waktu:</b> 604 baris tanggal dikoreksi. Setelah perbaikan, rentang menjadi 19 Juli – 17 Oktober 2008 dan tidak ada lompatan waktu mundur.</div>''',unsafe_allow_html=True)
+    display_nb_table('split',title='Pembagian train dan test',help_text='Stratified 75% : 25% · dari Colab Bagian 4',height=150)
+    subheading('Pembersihan fitur saat training','Tahapan hasil DataCleaner pada training set — jangan disamakan dengan statistik data awal')
+    stages=pd.DataFrame({
+        'Tahap':['Awal','Setelah missing > 50%','Setelah konstan','Setelah korelasi |r| > 0,95'],
+        'Fitur tersisa':[590,566,450,269],
+    })
+    fig=go.Figure(go.Bar(x=stages['Tahap'],y=stages['Fitur tersisa'],marker_color=[BLUE,'#6795D8','#5FA7C7','#25A4AC'],
+                         text=stages['Fitur tersisa'],textposition='outside'))
+    fig.update_layout(**base_chart(340),yaxis=dict(range=[0,670],title='Fitur tersisa',gridcolor='#E5EDF6'))
+    show_chart(fig)
+    st.caption('Training: 590 awal − 24 fitur terlalu kosong − 116 konstan − 181 berkorelasi tinggi = 269. Keputusan preprocessing di-fit dalam fold training, bukan seluruh data.')
+    st.markdown('''<div class="callout"><b>EDA pendukung:</b> Uji missingness dilakukan pada 103 fitur; 8 memiliki p &lt; 0,05, tetapi <b>0</b> yang signifikan setelah FDR. Analisis korelasi training: 450 fitur, 612 pasangan |r| &gt; 0,80; 280 pasangan |r| &gt; 0,95; 125 pasangan |r| &gt; 0,99. PCA membutuhkan 85 / 126 / 159 komponen untuk menjelaskan 80% / 90% / 95% varians.</div>''',unsafe_allow_html=True)
     if df_upload is not None:
         st.divider()
-        subheading("Eksplorasi interaktif dataset", "Grafik berikut dihitung dari CSV yang diunggah, bukan nilai tetap notebook")
-        tab1, tab2, tab3 = st.tabs(["Missing value", "Sensor individual", "Pratinjau data"])
-        with tab1:
-            top_count = st.slider("Jumlah sensor dengan missing terbanyak", 5, min(40,max(5,numeric_features)),
-                                  min(20,max(5,numeric_features)), key="missing_n") if numeric_features>=5 else 0
-            data = quality_df.sort_values("Persentase kosong", ascending=False).head(top_count)
-            if len(data):
-                fig=go.Figure(go.Bar(x=data["Sensor"], y=data["Persentase kosong"],
-                                     marker_color=BLUE, hovertemplate="%{x}: %{y:.1f}% kosong<extra></extra>"))
-                fig.update_layout(**base_chart(360), yaxis_title="Missing value (%)",xaxis_title="Sensor")
+        subheading('EDA interaktif dari CSV yang diunggah','Bagian ini dihitung ulang dari dataset upload, bukan dari notebook benchmark')
+        try:
+            sensors=sensor_numeric(df_upload)
+            if not sensors.empty:
+                a,b,c=st.columns(3)
+                a.metric('Baris CSV',len(df_upload))
+                b.metric('Fitur numerik',sensors.shape[1])
+                c.metric('Missing cell CSV',f'{sensors.isna().mean().mean()*100:.2f}%')
+                missing=(sensors.isna().mean()*100).sort_values(ascending=False).head(18)
+                fig=go.Figure(go.Bar(x=missing.index.astype(str),y=missing.values,marker_color=BLUE))
+                fig.update_layout(**base_chart(320),yaxis_title='Missing (%)',xaxis_title='Sensor')
                 show_chart(fig)
-            else:
-                st.info("Tidak ada sensor untuk ditampilkan.")
-        with tab2:
-            numeric = sensor_numeric(df_upload)
-            possible=[str(c) for c in numeric.columns if numeric[c].notna().sum() > 0]
-            if not possible:
-                st.warning("Tidak ditemukan sensor numerik yang memiliki nilai valid.")
-            else:
-                chosen = st.selectbox("Pilih sensor yang ingin diamati", possible)
-                fig=go.Figure()
-                counts = raw_class_counts(df_upload)
-                vals=numeric[chosen]
-                if counts is not None:
-                    label=pd.to_numeric(df_upload["Pass/Fail"], errors="coerce")
-                    for clas,name,color in [(-1,"Pass",BLUE),(1,"Fail",CORAL)]:
-                        fig.add_histogram(x=vals[label==clas].dropna(), name=name,
-                                          marker_color=color, opacity=.65, nbinsx=45)
-                    fig.update_layout(barmode="overlay")
-                else:
-                    fig.add_histogram(x=vals.dropna(), name="Sensor",marker_color=BLUE,nbinsx=45)
-                fig.update_layout(**base_chart(360), xaxis_title=chosen,yaxis_title="Jumlah wafer")
-                show_chart(fig)
-                st.caption("Perbandingan distribusi bersifat eksploratif, bukan bukti sebab akibat.")
-        with tab3:
-            cols=st.slider("Kolom yang ditampilkan", 5, min(len(df_upload.columns), 35),
-                           min(12,len(df_upload.columns))) if len(df_upload.columns)>=5 else len(df_upload.columns)
-            st.dataframe(df_upload.iloc[:100, :cols], use_container_width=True, hide_index=True)
-            st.download_button("Unduh ringkasan kualitas sensor (CSV)",
-                               data=quality_df.to_csv(index=False).encode("utf-8-sig"),
-                               file_name="secom_kualitas_sensor.csv", mime="text/csv")
+                with st.expander('Pratinjau 20 baris dataset yang diunggah'):
+                    st.dataframe(df_upload.iloc[:20,:min(15,len(df_upload.columns))],use_container_width=True,hide_index=True)
+        except Exception as exc:st.error(f'EDA CSV gagal: {exc}')
 
-elif selection == "🏆 Perbandingan Model":
-    hero("MODEL BENCHMARK / 5 × 2 CV", "Perbandingan 19 Algoritma", "Hasil screening cross-validation dari notebook. Bandingkan PR-AUC, ROC-AUC, G-mean, dan akurasi tanpa menjalankan training ulang.")
-    a,b,c = st.columns(3)
-    with a: stat("Model terbaik", "Extra Trees", "PR-AUC tertinggi pada 5×2 CV")
-    with b: stat("PR-AUC CV", "0,223", "Simpangan baku ±0,083")
-    with c: stat("Jumlah algoritma", "19", "+ baseline dan varian lanjutan di notebook")
-    data = df_models()
-    l,r = st.columns([1,1],gap="medium")
-    with l:
-        metric = st.selectbox("Urutkan berdasarkan metrik", ["PR-AUC","ROC-AUC","G-mean","Akurasi"], index=0)
-    with r:
-        n = st.slider("Jumlah model ditampilkan",5,19,10)
-    ordered = data.sort_values(metric, ascending=False).head(n)
-    subheading("Peringkat algoritma", "Model terbaik menurut metrik yang dipilih akan berada di bagian atas tabel")
-    show_chart(bar_models(ordered, metric))
-    st.dataframe(
-        data.sort_values(metric,ascending=False).reset_index(drop=True).style.format({k:"{:.3f}" for k in ["PR-AUC","SD PR-AUC","ROC-AUC","G-mean","Akurasi"]}),
-        use_container_width=True, hide_index=True,
-    )
-    st.download_button("Unduh seluruh hasil perbandingan (CSV)",
-                       data=data.to_csv(index=False).encode("utf-8-sig"),
-                       file_name="secom_perbandingan_19_model.csv", mime="text/csv")
-    st.markdown('<div class="callout"><b>Perhatikan:</b> G-mean Extra Trees = 0,000 pada screening karena threshold default 0,50 hampir selalu memprediksi Pass. Setelah threshold dioptimalkan memakai out-of-fold training, sensitivitas test meningkat menjadi 80,8%. Nilai akurasi yang tinggi tidak otomatis berarti pendeteksian Fail baik.</div>', unsafe_allow_html=True)
-    with st.expander("Apa yang dilakukan setelah screening 19 algoritma?"):
-        st.markdown("Notebook juga membandingkan resampling, seleksi fitur, tuning Optuna, soft voting, dan stacking. PR-AUC CV **Extra Trees tuned = 0,217**, **stacking = 0,213**, dan **soft voting = 0,208**; hasil ini belum melampaui Extra Trees dasar (0,223). Perbedaan dengan pesaing teratas juga tidak signifikan pada uji pasangan terkoreksi.")
-
-elif selection == "🎯 Evaluasi & Threshold":
-    hero("TEST SET / OPERATING POINTS", "Evaluasi Model & Threshold", "Bandingkan trade-off antara wafer Fail yang tertangkap dan alarm palsu. Semua titik operasi ditetapkan pada training set, lalu dievaluasi pada test set.")
-    ops = df_operating()
-    name=st.selectbox("Strategi penentuan threshold",ops["Strategi"].tolist(),index=0)
-    row=ops.loc[ops["Strategi"]==name].iloc[0]
-    c1,c2,c3,c4=st.columns(4)
-    with c1: stat("Threshold",f"{row['Threshold']:.3f}".replace(".",","),"Ambang deteksi Fail")
-    with c2: stat("Sensitivitas",f"{row['Sensitivitas']:.1%}".replace(".",","),f"{int(row['TP'])} dari 26 Fail terdeteksi")
-    with c3: stat("Spesifisitas",f"{row['Spesifisitas']:.1%}".replace(".",","),f"{int(row['TN'])} dari 366 Pass aman")
-    with c4: stat("Presisi",f"{row['Presisi']:.1%}".replace(".",","),f"{int(row['TP'])} dari {int(row['TP']+row['FP'])} alarm benar")
-    left,right=st.columns([1.0,1.10],gap="large")
-    with left:
-        subheading("Confusion matrix", "Komposisi prediksi pada 392 wafer test")
-        show_chart(confusion_chart(row))
-        st.caption("TP: Fail benar terdeteksi · FN: Fail lolos · FP: Pass diberi alarm · TN: Pass benar.")
-    with right:
-        subheading("Evaluasi trade-off", "Mengubah threshold menukar sensitivitas dengan alarm palsu")
-        fig=go.Figure()
-        for key,title,color in [("Sensitivitas","Recall Fail",CORAL),("Spesifisitas","Spesifisitas",BLUE),("Presisi","Presisi",CYAN)]:
-            fig.add_bar(x=[title],y=[row[key]],name=title,marker_color=color,
-                        text=[f"{row[key]:.1%}"],textposition="outside")
-        fig.update_layout(**base_chart(325), yaxis=dict(range=[0,1.1],tickformat=".0%",gridcolor="#E9EEF6"),
-                          showlegend=False)
-        show_chart(fig)
-        panel("Makna praktis", "Pada threshold utama 0,137: 21 dari 26 wafer Fail berhasil dikenali, tetapi 107 wafer Pass menerima alarm palsu. Model cocok untuk <b>prioritas inspeksi tambahan</b>, bukan keputusan scrap otomatis.")
-    subheading("Tabel alternatif threshold", "Pilihan di bawah berasal dari notebook (bukan simulasi threshold arbitrer)")
-    st.dataframe(ops.style.format({"Threshold":"{:.3f}","Sensitivitas":"{:.1%}","Spesifisitas":"{:.1%}","Presisi":"{:.1%}","G-mean":"{:.3f}","MCC":"{:.3f}","Akurasi":"{:.1%}"}),
-                 use_container_width=True,hide_index=True)
-    st.markdown('<div class="callout warning"><b>Catatan interpretasi:</b> PR-AUC test = 0,240 dan ROC-AUC test = 0,798 tetap sama untuk semua titik operasi karena keduanya dihitung dari seluruh skor, bukan dari threshold tertentu. Metrik sensitivitas, spesifisitas, dan confusion matrix berubah ketika threshold berubah.</div>', unsafe_allow_html=True)
-
-elif selection == "📈 Drift & Biaya":
-    hero("ROBUSTNESS / RISK ANALYTICS", "Drift Temporal & Risiko Keputusan", "Hasil split acak terlihat menjanjikan, tetapi validasi kronologis mengungkap penurunan performa saat kondisi manufaktur berubah.")
-    left,right=st.columns([1.04,1],gap="large")
-    with left:
-        subheading("Fail rate dari waktu ke waktu", "Angka bulanan yang dilaporkan notebook untuk Juli–Oktober 2008")
-        month=pd.DataFrame(MONTHLY_FAIL,columns=["Bulan","Fail rate"])
-        fig=go.Figure(go.Bar(x=month["Bulan"],y=month["Fail rate"],
-                             marker_color=[CORAL,"#F1A3A9","#99B6E7","#6197DC"],
-                             text=[f"{v:.1%}" for v in month["Fail rate"]],textposition="outside"))
-        fig.update_layout(**base_chart(340),yaxis=dict(title="Fail rate",tickformat=".0%",range=[0,.27],gridcolor="#E5EDF6"))
-        show_chart(fig)
-        st.caption("Uji χ² antar-bulan pada notebook: χ² = 44,11; p < 0,001. Perbedaan fail rate menunjukkan dinamika proses yang tidak stabil.")
-    with right:
-        subheading("Validasi acak vs kronologis", "Performa model pada dua skema pengujian")
-        drift=pd.DataFrame({"Metrik":["PR-AUC","ROC-AUC","Sensitivitas","G-mean"],
-                            "Split acak":[.240,.798,.808,.756],
-                            "Split kronologis":[.074,.570,.083,.270]})
-        fig=go.Figure()
-        fig.add_bar(name="Split acak",x=drift["Metrik"],y=drift["Split acak"],marker_color=BLUE,
-                    text=[f"{v:.3f}" for v in drift["Split acak"]],textposition="outside")
-        fig.add_bar(name="Split kronologis",x=drift["Metrik"],y=drift["Split kronologis"],marker_color=CORAL,
-                    text=[f"{v:.3f}" for v in drift["Split kronologis"]],textposition="outside")
-        fig.update_layout(**base_chart(340),barmode="group",yaxis=dict(range=[0,.93],gridcolor="#E5EDF6"),
-                          legend=dict(orientation="h",y=-.2))
-        show_chart(fig)
-        st.markdown('<div class="callout warning"><b>Temuan utama:</b> PR-AUC turun dari 0,240 menjadi 0,074 pada split kronologis. Angka split acak kemungkinan optimistis untuk wafer produksi masa depan. Evaluasi drift dan retraining berkala diperlukan sebelum penerapan.</div>', unsafe_allow_html=True)
-
-    st.divider()
-    subheading("Simulasi biaya dari confusion matrix", "Biaya relatif FN (Fail terlewat) terhadap FP (alarm palsu), khusus titik operasi notebook")
-    a,b=st.columns([1.05,1],gap="large")
-    with a:
-        ratio=st.slider("Rasio biaya FN : FP",min_value=1,max_value=50,value=10,step=1)
-        comparison=df_operating()[["Strategi","Threshold","FP","FN"]].copy()
-        comparison["Biaya per wafer"]=(ratio*comparison["FN"]+comparison["FP"])/392
-        comparison=pd.concat([comparison,pd.DataFrame([
-            {"Strategi":"Tanpa model: selalu Pass","Threshold":np.nan,"FP":0,"FN":26,"Biaya per wafer":ratio*26/392},
-            {"Strategi":"Tanpa model: periksa semua","Threshold":np.nan,"FP":366,"FN":0,"Biaya per wafer":366/392},
-        ])],ignore_index=True)
-        st.dataframe(comparison[["Strategi","Biaya per wafer"]].sort_values("Biaya per wafer").style.format({"Biaya per wafer":"{:.3f}"}),
-                     use_container_width=True,hide_index=True)
-    with b:
-        subheading("Bandingkan kebijakan", "Semakin kecil biaya per wafer, semakin efisien pada rasio tersebut")
-        best=comparison.sort_values("Biaya per wafer").head(7)
-        fig=go.Figure(go.Bar(y=best["Strategi"][::-1],x=best["Biaya per wafer"][::-1],orientation="h",
-                             marker_color=[BLUE if "Tanpa model" not in x else "#ADC0D5" for x in best["Strategi"][::-1]],
-                             text=[f"{v:.3f}" for v in best["Biaya per wafer"][::-1]],textposition="outside"))
-        fig.update_layout(**base_chart(340,dict(l=5,r=53,t=10,b=20)),xaxis=dict(showgrid=True,gridcolor="#E7EEF7"),yaxis=dict(automargin=True))
-        show_chart(fig)
-        st.caption("Rumus: (rasio biaya FN × jumlah FN + jumlah FP) / 392 wafer. Tidak memperhitungkan biaya operasional lain.")
-    st.markdown('<div class="callout"><b>Kesimpulan keputusan:</b> pemakaian model bergantung pada biaya nyata dari kesalahan. Model harus dipakai sebagai alat bantu prioritas inspeksi, dengan kontrol kualitas dan peninjauan berkala.</div>', unsafe_allow_html=True)
-
-elif selection == "🔬 Insight Sensor":
-    hero("INTERPRETABILITY / SENSOR SIGNALS", "Insight & Sensor Penting", "Temukan fitur yang paling konsisten relevan, pahami batas interpretasi 590 sensor anonim, dan pelajari risiko kebocoran data.")
+elif selection == '🏆 Perbandingan Model':
+    hero('MODEL SCREENING / REPEATED STRATIFIED CV','Perbandingan 19 Algoritma',
+         'Skor cross-validation Google Colab (5 fold × 2 pengulangan), bukan skor pengujian akhir test set.')
     a,b,c=st.columns(3)
-    with a: stat("Sensor diuji", "474", "Uji Mann–Whitney pada training set")
-    with b: stat("Lolos FDR", "13", "Koreksi multiple testing")
-    with c: stat("AUC tunggal maks.", "0,683", "Sinyal per sensor masih lemah")
-    left,right=st.columns([1.18,1],gap="large")
-    with left:
-        subheading("Sensor kandidat teratas", "AUC absolut arah terbaik (max(AUC, 1−AUC)) untuk uji satu sensor")
-        data=pd.DataFrame(TOP_SENSORS,columns=["Sensor","AUC tunggal","q-FDR"])
-        data["AUC pembeda"] = data["AUC tunggal"].apply(lambda v:max(v,1-v))
-        data=data.sort_values("AUC pembeda")
-        fig=go.Figure(go.Bar(y=data["Sensor"],x=data["AUC pembeda"],orientation="h",
-                             marker_color=BLUE,text=[f"{v:.3f}" for v in data["AUC pembeda"]],textposition="outside"))
-        fig.update_layout(**base_chart(400,dict(l=12,r=47,t=15,b=24)),xaxis=dict(range=[0,.80],gridcolor="#E7EDF5"),yaxis=dict(automargin=True))
-        show_chart(fig)
-        st.caption("Angka berasal dari uji univariat di notebook, bukan feature importance multivariat.")
-    with right:
-        subheading("Sensor konsisten lintas metode", "Irisan SHAP, permutation importance, dan analisis univariat")
-        for i in range(0,len(IMPORTANT_SENSORS),2):
-            s1,s2=IMPORTANT_SENSORS[i:i+2]
-            col1,col2=st.columns(2)
-            col1.markdown(f'<div class="info-panel" style="padding:12px 15px;margin:4px 0"><div class="panel-header" style="margin:0">{s1}</div></div>',unsafe_allow_html=True)
-            col2.markdown(f'<div class="info-panel" style="padding:12px 15px;margin:4px 0"><div class="panel-header" style="margin:0">{s2}</div></div>',unsafe_allow_html=True)
-        panel("Batas interpretasi", "Nama sensor dalam dataset SECOM anonim. Penting secara statistik tidak otomatis berarti sebab kegagalan. Diperlukan metadata sensor dan validasi bersama ahli proses.")
-    st.divider()
-    subheading("Jebakan umum: data leakage", "Perbedaan nilai yang tampak bagus dan evaluasi yang benar")
-    leaks=pd.DataFrame({"Pendekatan":["Preprocessing bocor", "Pipeline benar"],
-                        "PR-AUC":[.998,.240],"Akurasi":[.981,.714]})
-    fig=go.Figure()
-    for metric,col in [("PR-AUC",CORAL),("Akurasi",BLUE)]:
-        fig.add_bar(name=metric,x=leaks["Pendekatan"],y=leaks[metric],marker_color=col,
-                    text=[f"{v:.3f}" for v in leaks[metric]],textposition="outside")
-    fig.update_layout(**base_chart(320),barmode="group",yaxis=dict(range=[0,1.12],gridcolor="#E7EDF5"),
-                      legend=dict(orientation="h",y=-.20))
-    show_chart(fig)
-    st.markdown('<div class="callout warning"><b>Hindari SMOTE, scaling, dan seleksi fitur sebelum train/test split.</b> Notebook memperlihatkan PR-AUC 0,998 dari pipeline yang bocor — angka tersebut tidak valid untuk generalisasi. Nilai PR-AUC 0,240 adalah evaluasi pada test set yang benar.</div>',unsafe_allow_html=True)
+    with a:stat('Model terpilih','Extra Trees','PR-AUC CV = 0,223 ± 0,083')
+    with b:stat('ROC-AUC CV Extra Trees','0,749 ± 0,031','Berbeda dengan test ROC-AUC 0,798')
+    with c:stat('Baseline acak PR-AUC','0,066','Prevalensi Fail ≈ 0,0664')
+    df=df_models()
+    metrics={'PR-AUC':'pr_auc','ROC-AUC':'roc_auc','G-mean':'g_mean',
+             'Recall / Sensitivitas':'recall','Spesifisitas':'specificity',
+             'Balanced accuracy':'bal_acc','MCC':'mcc','Akurasi':'accuracy'}
+    l,r=st.columns([2,1])
+    with l:metric=st.selectbox('Pilih metrik cross-validation',list(metrics))
+    with r:n=st.slider('Jumlah model pada grafik',5,19,12)
+    key=metrics[metric]
+    vals=df[['Model',key]].copy()
+    vals[metric]=vals[key].map(cv_mean)
+    vals=vals.sort_values(metric,ascending=False).head(n)
+    subheading(f'Peringkat berdasarkan {metric}','Nilai pada grafik adalah rata-rata CV, bukan skor test set')
+    plot_horizontal(vals,'Model',metric,'Extra Trees')
+    st.markdown('''<div class="callout"><b>Perbandingan valid:</b> 0,749 merupakan rata-rata ROC-AUC Extra Trees saat screening. Nilai 0,798 berasal dari test set setelah model terpilih. G-mean CV Extra Trees = 0 pada threshold default 0,5, bukan pada threshold hasil optimasi.</div>''',unsafe_allow_html=True)
+    display_nb_table('screening',title='Tabel lengkap Google Colab — 19 model + 2 baseline',
+                     help_text='Semua mean ± SD: PR-AUC, ROC-AUC, G-mean, balanced accuracy, MCC, recall, spesifisitas, akurasi, waktu',height=600)
+    st.caption('Untuk membaca grafik, ingat: PR-AUC adalah kriteria seleksi model, bukan akurasi tertinggi. Skor klasifikasi threshold-dependent pada screening memakai threshold default.')
 
-st.markdown('<div class="footer-note">SECOM Insight · Dashboard pembacaan hasil penelitian. Hasil model, threshold, dan grafik benchmark berasal dari notebook SECOM yang diberikan; CSV opsional hanya mengubah eksplorasi data. Untuk eksperimen/model baru, jalankan pipeline validasi notebook secara terpisah.</div>',unsafe_allow_html=True)
+elif selection == '⚙️ Resampling & Tuning':
+    hero('EXPERIMENT COMPARISON / GOOGLE COLAB','Resampling, Seleksi Fitur & Tuning',
+         'Eksperimen lanjutan mengikuti notebook. Nilai Optuna menggunakan 5-fold dengan seed berbeda dari perbandingan akhir 5×2 CV.')
+    tab1,tab2,tab3=st.tabs(['Penanganan kelas','Seleksi fitur','Tuning, ensemble & uji statistik'])
+    with tab1:
+        subheading('Penanganan ketidakseimbangan kelas','Dua learner: Logistic Regression dan Extra Trees · Colab Bagian 9')
+        st.markdown('Resampling dapat mengubah recall/G-mean pada threshold default, tetapi tidak otomatis menaikkan PR-AUC.')
+        display_nb_table('resampling',height=400)
+    with tab2:
+        subheading('Seleksi fitur dan reduksi dimensi','ANOVA, MI, PCA, L1 Logistic, RF importance, dan seluruh fitur · Colab Bagian 10')
+        display_nb_table('feature_selection',height=390)
+        st.info('Extra Trees tanpa seleksi fitur tambahan tetap mencapai PR-AUC CV 0,223; pemilihan fitur agresif tidak meningkatkan hasil secara konsisten.')
+    with tab3:
+        a,b=st.columns(2)
+        with a:stat('Optuna Extra Trees','0,2110','5-fold tuning, 25 trial (2 pruned)')
+        with b:stat('Optuna LightGBM','0,2228','5-fold tuning, 30 trial (6 pruned)')
+        st.caption('Nilai Optuna di atas bukan hasil re-evaluasi 5×2 CV. Re-evaluasi: Extra Trees (tuned) 0,217 ± 0,076; LightGBM (tuned) 0,207 ± 0,071.')
+        st.markdown('**Ensemble pada 5×2 CV:** Soft voting 0,208 ± 0,060; stacking 0,213 ± 0,067 (PR-AUC).')
+        display_nb_table('top_models',title='10 model teratas, termasuk tuning dan ensemble',height=430)
+        subheading('Uji perbandingan statistik','Friedman χ²=100,86; df=22; p=4,56×10⁻¹²')
+        display_nb_table('significance',height=370)
+        st.info('Corrected resampled t-test: delapan pesaing terdekat Extra Trees memiliki p > 0,4. Data belum cukup untuk menyimpulkan perbedaan yang signifikan pada pasangan tersebut.')
+
+elif selection == '🎯 Evaluasi & Threshold':
+    hero('OOF TRAINING → HOLDOUT TEST','Evaluasi Model & Pemilihan Threshold',
+         'Titik operasi ditetapkan dari prediksi out-of-fold pada training set. Nilai di test set dihitung setelah titik operasi ditetapkan.')
+    ops=df_operating()
+    selected=st.selectbox('Pilih titik operasi test set',ops['Strategi'].tolist(),index=0)
+    row=ops[ops['Strategi']==selected].iloc[0]
+    a,b,c,d=st.columns(4)
+    with a:stat('Threshold test (dibulatkan)',f"{row['Threshold']:.3f}",'Utama sebenarnya = 0,1372')
+    with b:stat('Sensitivitas test',f"{row['Sensitivitas']:.1%}",f"{int(row['TP'])} dari 26 Fail")
+    with c:stat('Spesifisitas test',f"{row['Spesifisitas']:.1%}",f"{int(row['TN'])} dari 366 Pass")
+    with d:stat('Presisi test',f"{row['Presisi']:.1%}",f"{int(row['TP'])} dari {int(row['TP']+row['FP'])} alarm")
+    left,right=st.columns([1,1],gap='large')
+    with left:
+        subheading('Confusion matrix – TEST','392 wafer, threshold terpilih')
+        show_chart(confusion_chart(row))
+    with right:
+        subheading('Trade-off – TEST','Sensitivitas, spesifisitas, dan presisi')
+        fig=go.Figure(go.Bar(x=['Sensitivitas','Spesifisitas','Presisi'],
+                             y=[row['Sensitivitas'],row['Spesifisitas'],row['Presisi']],
+                             marker_color=[CORAL,BLUE,CYAN],
+                             text=[f"{row[c]:.1%}" for c in ['Sensitivitas','Spesifisitas','Presisi']],textposition='outside'))
+        fig.update_layout(**base_chart(320),yaxis=dict(range=[0,1.10],tickformat='.0%',gridcolor='#E5EDF6'))
+        show_chart(fig)
+        panel('Makna confusion matrix','TP = Fail terdeteksi, FN = Fail terlewat, FP = Pass terkena alarm palsu, TN = Pass dikenali benar.')
+    display_nb_table('threshold_oof_train',title='1. Hasil OOF TRAINING (untuk memilih threshold)',
+                     help_text='Bukan angka test; OOF utama PR-AUC 0,186 dan ROC-AUC 0,754',height=330)
+    display_nb_table('threshold_test',title='2. Hasil TEST SET (setelah threshold dipilih)',
+                     help_text='Seluruh TP, FN, FP, TN dan 9 metrik dari notebook Colab Bagian 15',height=340)
+    display_nb_table('test_ci',title='3. Seluruh metrik TEST dan CI 95%',
+                     help_text='Bootstrap 2.000 replikasi; tidak semua metrik mempunyai CI sempit',height=425)
+    st.markdown('''<div class="callout warning"><b>Hasil penting:</b> pada threshold default 0,50 semua 26 Fail terlewat meskipun akurasi 0,934. Pada threshold utama G-mean dari OOF (0,1372), 21 Fail terdeteksi, 5 terlewat, dan 107 Pass salah diberi alarm.</div>''',unsafe_allow_html=True)
+
+elif selection == '📈 Drift & Biaya':
+    hero('CHRONOLOGICAL VALIDATION / COST','Drift Temporal & Analisis Biaya',
+         'Perbandingan acak versus kronologis dan hasil optimasi biaya yang benar-benar dilaporkan Google Colab.')
+    left,right=st.columns([1,1],gap='large')
+    with left:
+        subheading('Fail rate per bulan','Juli–Oktober 2008 · hasil EDA notebook')
+        months=pd.DataFrame(MONTHLY_FAIL,columns=['Bulan','Fail rate'])
+        fig=go.Figure(go.Bar(x=months['Bulan'],y=months['Fail rate'],
+                             text=[f'{x:.1%}' for x in months['Fail rate']],textposition='outside',
+                             marker_color=[CORAL,'#ECA1A7','#84AEDF','#3D77D2']))
+        fig.update_layout(**base_chart(330),yaxis=dict(range=[0,.27],tickformat='.0%',gridcolor='#E5EDF6'))
+        show_chart(fig)
+        st.caption('Uji χ² homogenitas antarbulan: 44,11; df=3; p < 0,001 (sesuai notebook).')
+    with right:
+        subheading('Validasi acak vs kronologis','Angka pengujian dari Google Colab Bagian 17')
+        chron=nb_table('chronological')
+        chosen=chron[chron['Keterangan'].isin(['pr_auc','roc_auc','sensitivity','g_mean'])]
+        fig=go.Figure()
+        for col,color in [('Split acak stratified',BLUE),('Split kronologis',CORAL)]:
+            fig.add_bar(name=col,x=chosen['Keterangan'],y=chosen[col],marker_color=color,
+                        text=[f'{v:.3f}' for v in chosen[col]],textposition='outside')
+        fig.update_layout(**base_chart(330),barmode='group',yaxis=dict(range=[0,1],gridcolor='#E5EDF6'),
+                          legend=dict(orientation='h',y=-.2))
+        show_chart(fig)
+        st.caption('Kronologis: training 1.175 wafer lebih awal (80 Fail), test 392 wafer terakhir (24 Fail).')
+    display_nb_table('chronological',title='Tabel validasi acak vs kronologis',height=365)
+    st.markdown('''<div class="callout warning"><b>Drift:</b> ROC-AUC test turun dari 0,798 menjadi 0,570 dan PR-AUC dari 0,240 menjadi 0,074. Pengujian acak kemungkinan optimistis untuk produksi masa depan.</div>''',unsafe_allow_html=True)
+    st.divider()
+    subheading('Biaya keputusan dari notebook','Setiap rasio biaya memilih threshold optimumnya sendiri pada OOF TRAINING; hasilnya kemudian diuji pada TEST')
+    costs=nb_table('cost')
+    display_nb_table('cost',title='Biaya per wafer menurut Google Colab (4 rasio)',height=260)
+    picked=st.selectbox('Pilih rasio biaya yang diuji Colab',costs['Keterangan'].astype(str).tolist(),index=1)
+    r=costs[costs['Keterangan']==picked].iloc[0]
+    comp=pd.DataFrame({'Kebijakan':['Model (threshold OOF terpilih)','Selalu Pass','Periksa semua'],
+                       'Biaya per wafer':[r['biaya/wafer model (test)'],r['biaya/wafer "selalu Pass"'],r['biaya/wafer "periksa semua"']]})
+    fig=go.Figure(go.Bar(x=comp['Kebijakan'],y=comp['Biaya per wafer'],marker_color=[BLUE,'#9CB5D7',CORAL],
+                         text=[f'{v:.3f}' for v in comp['Biaya per wafer']],textposition='outside'))
+    fig.update_layout(**base_chart(320),yaxis=dict(range=[0,max(comp['Biaya per wafer'])*1.2],gridcolor='#E5EDF6'))
+    show_chart(fig)
+    if float(r['penghematan vs strategi terbaik tanpa model'])<0:
+        st.warning(f"Pada rasio {picked}, model tidak memberikan penghematan dibanding opsi terbaik tanpa model (nilai notebook {float(r['penghematan vs strategi terbaik tanpa model']):.3f}).")
+    else:
+        st.success(f"Pada rasio {picked}, penghematan dibanding strategi terbaik tanpa model = {float(r['penghematan vs strategi terbaik tanpa model']):.1%} menurut notebook.")
+    st.caption('Tidak ada interpolasi threshold untuk rasio lain; dashboard hanya menampilkan 4 rasio yang benar-benar diuji di Colab. Semua nominal adalah biaya relatif, bukan rupiah.')
+
+elif selection == '🔬 Sensor & Anomali':
+    hero('UNIVARIATE / SHAP / ANOMALY DETECTION','Insight Sensor dan Pendekatan Anomali',
+         'Semua hasil sensor dan pendekatan unsupervised berasal dari output notebook, dengan metode sumbernya dibedakan.')
+    a,b,c=st.columns(3)
+    with a:stat('Sensor diuji MWU','474','74 p < 0,05')
+    with b:stat('Signifikan setelah FDR','13','Ambang q-FDR < 0,05')
+    with c:stat('AUC fitur tunggal max','0,683','Tidak sama dengan ROC-AUC model')
+    univ=nb_table('sensor_univariate')
+    vals=univ[['Keterangan','AUC_tunggal']].copy().sort_values('AUC_tunggal')
+    plot_horizontal(vals,'Keterangan','AUC_tunggal',height=435)
+    display_nb_table('sensor_univariate',title='Hasil uji univariat Mann–Whitney U (Colab Bagian 5.3)',height=370)
+    st.markdown('''<div class="callout"><b>Penting:</b> SHAP dan permutation importance di Colab dihitung memakai <b>LightGBM tuned</b> untuk interpretasi, bukan Extra Trees final. Grafik AUC sensor tunggal juga bukan feature importance model final.</div>''',unsafe_allow_html=True)
+    shap=nb_table('shap')
+    l,r=st.columns([1,1],gap='large')
+    with l:
+        subheading('SHAP (LightGBM tuned)','Mean |SHAP| pada 15 sensor teratas di notebook')
+        chart=shap[['Keterangan','mean|SHAP|']].copy()
+        plot_horizontal(chart,'Keterangan','mean|SHAP|',height=520)
+    with r:
+        subheading('Permutation importance (LightGBM tuned)','Penurunan PR-AUC test saat sensor diacak')
+        chart=shap[['Keterangan','perm_ΔPR-AUC']].copy().sort_values('perm_ΔPR-AUC')
+        fig=go.Figure(go.Bar(x=chart['perm_ΔPR-AUC'],y=chart['Keterangan'],orientation='h',
+                             marker_color=[BLUE if v>=0 else CORAL for v in chart['perm_ΔPR-AUC']],
+                             text=[f'{v:.3f}' for v in chart['perm_ΔPR-AUC']],textposition='outside'))
+        fig.update_layout(**base_chart(520,dict(l=4,r=50,t=10,b=30)),yaxis=dict(automargin=True),
+                          xaxis=dict(gridcolor='#E5EDF6'))
+        show_chart(fig)
+    display_nb_table('shap',title='Tabel SHAP, permutation dan peringkat MWU',height=405)
+    st.caption('Sensor konsisten di ≥2 daftar: f103, f129, f130, f205, f21, f213, f247, f33, f587, f59. Karena anonim, perlu metadata manufaktur untuk interpretasi fisik.')
+    display_nb_table('anomaly',title='Perbandingan SPC / deteksi anomali tanpa label vs Extra Trees',
+                     help_text='Hotelling T², SPE, Isolation Forest, LOF · Colab Bagian 19',height=320)
+    st.caption('PCA untuk SPC memakai 96 komponen (80% varians), UCL T² 146,4, UCL SPE 120,1. Pada data ini model supervised memiliki ROC-AUC dan PR-AUC lebih tinggi dari metode anomali.')
+
+else:
+    hero('VERIFIKASI / AKADEMIK','Kesimpulan Penelitian & Bukti Angka',
+         'Satu tempat untuk memeriksa kembali setiap tabel sumber yang ditampilkan tanpa melatih ulang model.')
+    st.markdown('### Kesimpulan berdasarkan Google Colab')
+    st.markdown('''
+1. **Akurasi bukan metrik pemilihan.** Baseline selalu Pass akurasinya 0,934, tetapi recall Fail 0. Pada syarat akurasi test minimal 90%, model hanya mendeteksi 5 dari 26 Fail.
+2. **Model final Extra Trees**, dipilih dari PR-AUC rata-rata CV 5×2 sebesar 0,223 ± 0,083. Perbaikan melalui tuning dan ensemble tidak melampaui hasil tersebut pada CV pembanding.
+3. **Test set akhir**: PR-AUC 0,240; ROC-AUC 0,798; sensitivitas 0,808; spesifisitas 0,708; presisi 0,164; G-mean 0,756; MCC 0,273; akurasi 0,714. Ini semua sesuai threshold utama G-mean dari OOF training.
+4. **Biaya bergantung rasio FN:FP.** Pada 10:1 penghematan 43,8%; pada 5:1 model belum lebih hemat daripada strategi terbaik tanpa model.
+5. **Drift menjadi keterbatasan besar.** Pada split kronologis, PR-AUC 0,074 dan ROC-AUC 0,570; penerapan produksi butuh validasi berurutan dan retraining.
+6. **Sensor dan data leakage perlu dibaca dengan tepat.** Hanya 13 dari 474 sensor signifikan setelah FDR; leakage sengaja disimulasikan di notebook untuk menunjukkan nilai terlalu optimistis.
+    ''')
+    subheading('Validasi data leakage','Eksperimen bocor hanyalah ilustrasi kesalahan metodologi, bukan performa model yang sah')
+    display_nb_table('leakage',height=390)
+    st.markdown('''<div class="callout warning"><b>Jangan melaporkan PR-AUC = 0,998 sebagai hasil model.</b> Angka itu berasal dari SMOTE/seleksi fitur sebelum split (data leakage). Hasil yang valid adalah PR-AUC test 0,240.</div>''',unsafe_allow_html=True)
+    display_nb_table('summary',title='Ringkasan final dari notebook (Colab Bagian 21)',height=350)
+    st.divider()
+    subheading('Audit tabel output Google Colab','Pilih satu tabel untuk membandingkan angka secara langsung dengan notebook')
+    titles={
+        'split':'Train/Test (Bagian 4)', 'quality':'Kualitas Data (Bagian 3)',
+        'baseline':'Baseline (Bagian 7)', 'screening':'19 Algoritma + Baseline (Bagian 8)',
+        'resampling':'Resampling (Bagian 9)', 'feature_selection':'Seleksi Fitur (Bagian 10)',
+        'top_models':'Top 10 dan Tuning/Ensemble (Bagian 12)', 'significance':'Signifikansi Model (Bagian 13)',
+        'threshold_oof_train':'Threshold dari OOF Training (Bagian 14)',
+        'test_ci':'Evaluasi Test + CI95% (Bagian 15)',
+        'threshold_test':'Titik Operasi Test (Bagian 15)', 'cost':'Biaya Model (Bagian 16)',
+        'chronological':'Validasi Kronologis (Bagian 17)','sensor_univariate':'Uji Sensor (Bagian 5)',
+        'shap':'SHAP/Permutation (Bagian 18)','anomaly':'SPC dan Anomali (Bagian 19)',
+        'leakage':'Data Leakage (Bagian 20)','summary':'Ringkasan Final (Bagian 21)',
+    }
+    chosen=st.selectbox('Output notebook yang ingin diperiksa',list(titles),format_func=lambda k:titles[k])
+    st.dataframe(nb_table(chosen),use_container_width=True,hide_index=True,height=450)
+    st.download_button('Unduh tabel yang dipilih (.csv)',data=nb_table(chosen).to_csv(index=False).encode('utf-8-sig'),
+                       file_name=f'google_colab_{chosen}.csv',mime='text/csv')
+    st.caption('Tabel asli diekstrak dari output sel notebook, tidak dihitung ulang. Pembulatan 3 desimal pada beberapa tabel mengikuti tampilan Colab. Tanggal/angka dari unggahan CSV dapat berbeda karena data berbeda.')
+
+st.markdown('''<div class="footer-note"><b>SECOM Insight v2.0 · Konsisten dengan output Google Colab.</b> Dataset SECOM 1.567 wafer × 590 sensor. Semua hasil eksperimen merupakan nilai statis dari notebook yang diberikan. Tidak ada training ulang atau prediksi wafer baru pada dashboard ini. Sumber data interaktif CSV, jika diunggah, hanya digunakan untuk EDA terpisah.</div>''',unsafe_allow_html=True)
