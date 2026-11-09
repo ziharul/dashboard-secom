@@ -1,0 +1,14 @@
+# Gunakan tema terang agar label, widget, dan kartu dashboard konsisten.
+[theme]
+base = "light"
+primaryColor = "#2B63DA"
+backgroundColor = "#F4F7FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#173755"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F7FB"
+textColor = "#173755"
+primaryColor = "#2B63DA"
