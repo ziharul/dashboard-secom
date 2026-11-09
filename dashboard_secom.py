@@ -97,53 +97,88 @@ st.markdown(
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"], [data-testid="stApp"] {
-  font-family:'DM Sans',sans-serif; color:#193553; }
+  font-family:'DM Sans',sans-serif; color:#18324D !important; }
 [data-testid="stAppViewContainer"] { background:#F4F7FB; }
-[data-testid="stHeader"] { background:rgba(244,247,251,.91); }
+[data-testid="stHeader"] { background:rgba(244,247,251,.96); }
 .block-container {max-width:1450px; padding:2.05rem 2.7rem 4rem;}
-[data-testid="stSidebar"] { background:#FFF; border-right:1px solid #E2E9F2; }
+[data-testid="stSidebar"] { background:#FFFFFF; border-right:1px solid #DCE6F2; }
+[data-testid="stSidebar"] * { color:#17324D !important; opacity:1 !important; }
+[data-testid="stSidebar"] .stRadio > label,
+[data-testid="stSidebar"] .stFileUploader > label,
+[data-testid="stSidebar"] .stSelectbox > label,
+[data-testid="stSidebar"] .stSlider > label,
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] small,
+[data-testid="stSidebar"] div[data-testid="stFileUploaderDropzoneInstructions"] {
+  color:#17324D !important;
+}
 [data-testid="stSidebar"] .stRadio label {padding:.22rem 0;}
 [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-  border-radius:10px; margin:3px 0; }
+  border-radius:12px; margin:4px 0; padding:10px 12px !important;
+  background:#F7FAFD; border:1px solid #E3EBF5; }
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
+  background:#EEF4FF; border-color:#C9D8F1; }
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {
+  background:#EAF2FF; border-color:#2B63DA; box-shadow:inset 3px 0 0 #2B63DA; }
+[data-testid="stSidebar"] .stFileUploader section {
+  background:#FFFFFF; border:1px dashed #BACBE0; border-radius:14px; }
+[data-testid="stSidebar"] .stFileUploader section button {
+  background:#17324D !important; color:#FFFFFF !important; border:none; }
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+  background:#F8FBFF; border-radius:14px; }
 h1,h2,h3,h4 {font-family:'Plus Jakarta Sans',sans-serif !important;
  letter-spacing:-.035em !important; color:#102A4C !important;}
 h1 {font-size:2rem!important;font-weight:800!important;}
 h2 {font-size:1.35rem!important;font-weight:800!important;}
 h3 {font-size:1.05rem!important;}
-p {line-height:1.65;}
+p {line-height:1.65; color:#304963;}
+label, .stMarkdown, .stCaption, .stText, .st-emotion-cache-10trblm,
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"], [data-testid="stMetricDelta"],
+[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
+  color:#18324D !important;
+}
 .hero {border-radius:20px;padding:32px 36px 33px;margin-bottom:24px;
  background:linear-gradient(112deg,#0D2849 0%,#183E78 58%,#346BD6 100%);
  box-shadow:0 16px 35px rgba(13,43,95,.13);position:relative;overflow:hidden;}
 .hero::after{content:'';position:absolute;top:-115px;right:-90px;width:400px;height:400px;
  border:1px solid #ffffff3a;border-radius:50%;box-shadow:0 0 0 65px #ffffff09,0 0 0 135px #ffffff07;}
-.hero .eyebrow{font-size:.74rem;font-weight:800;letter-spacing:.16em;color:#C4DCFF;}
+.hero .eyebrow{font-size:.74rem;font-weight:800;letter-spacing:.16em;color:#D7E6FF;}
 .hero .heading{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;
  font-size:1.94rem;line-height:1.3;color:white;letter-spacing:-.035em;margin-top:9px;}
-.hero .lead{color:#D8E5FB;line-height:1.6;font-size:.9rem;max-width:810px;margin:12px 0 0;}
-.kicker{font-size:.73rem;font-weight:800;letter-spacing:.14em;color:#3567D8;margin:18px 0 8px;}
-.stat-card{min-height:132px;background:#FFF;border:1px solid #E4EBF5;border-radius:16px;
- padding:20px 20px 18px;box-shadow:0 6px 24px rgba(20,52,92,.035);margin-bottom:12px;}
-.stat-card .label{font-size:.77rem;color:#708398;font-weight:650;}
-.stat-card .num{font-family:'Plus Jakarta Sans',sans-serif;font-size:1.75rem;font-weight:800;
- color:#16365B;letter-spacing:-.055em;margin-top:9px;}
-.stat-card .hint{font-size:.71rem;color:#8090A3;margin-top:7px;}
-.info-panel{border:1px solid #DFE8F5;background:#FFF;border-radius:14px;
- padding:19px 21px;margin:12px 0 17px;line-height:1.55;}
-.info-panel .panel-header{font-family:'Plus Jakarta Sans',sans-serif;font-size:.98rem;
- font-weight:800;color:#183959;margin-bottom:8px;}
-.info-panel .panel-body{font-size:.82rem;color:#5F728A;}
+.hero .lead{color:#E4EEFF;line-height:1.7;font-size:.95rem;max-width:860px;margin:12px 0 0;}
+.kicker{font-size:.73rem;font-weight:800;letter-spacing:.14em;color:#2B63DA;margin:18px 0 8px;}
+.stat-card{min-height:132px;background:#FFF;border:1px solid #DDE7F2;border-radius:16px;
+ padding:20px 20px 18px;box-shadow:0 8px 24px rgba(20,52,92,.05);margin-bottom:12px;}
+.stat-card .label{font-size:.82rem;color:#4D6783;font-weight:750;}
+.stat-card .num{font-family:'Plus Jakarta Sans',sans-serif;font-size:1.95rem;font-weight:800;
+ color:#13345B;letter-spacing:-.055em;margin-top:10px;}
+.stat-card .hint{font-size:.78rem;color:#556D87;margin-top:8px;line-height:1.45;}
+.info-panel{border:1px solid #DBE6F2;background:#FFF;border-radius:14px;
+ padding:19px 21px;margin:12px 0 17px;line-height:1.6;}
+.info-panel .panel-header{font-family:'Plus Jakarta Sans',sans-serif;font-size:1rem;
+ font-weight:800;color:#173755;margin-bottom:8px;}
+.info-panel .panel-body{font-size:.88rem;color:#37516C;}
 .callout{border-left:4px solid #336CD9;background:#EAF2FF;border-radius:0 12px 12px 0;
- padding:14px 18px;font-size:.85rem;line-height:1.6;color:#2D4C78;margin:13px 0 17px;}
-.warning{border-left-color:#E19A45;background:#FFF7EB;color:#795327;}
-.section-label{font-size:1.12rem;font-weight:800;color:#16385B;margin:14px 0 9px;}
-.divider-caption{font-size:.77rem;color:#77889B;margin:0 0 14px;}
-[data-testid="stMetric"] {background:#fff;padding:14px 16px;border-radius:12px;border:1px solid #E4EBF5;}
-[data-testid="stDataFrame"] {border:1px solid #E4EBF5;border-radius:13px;overflow:hidden;}
-[data-testid="stExpander"] {border-radius:12px;border:1px solid #E1EAF4;background:#fff;}
+ padding:14px 18px;font-size:.90rem;line-height:1.65;color:#1F426D;margin:13px 0 17px;}
+.warning{border-left-color:#D88A2A;background:#FFF6E8;color:#6B471E;}
+.section-label{font-size:1.16rem;font-weight:800;color:#16385B;margin:14px 0 9px;}
+.divider-caption{font-size:.84rem;color:#516982;margin:0 0 14px;}
+[data-testid="stMetric"] {background:#fff;padding:16px 18px;border-radius:14px;border:1px solid #DDE7F2;}
+[data-testid="stMetric"] [data-testid="stMetricLabel"] {font-weight:700 !important; color:#39536D !important;}
+[data-testid="stMetric"] [data-testid="stMetricValue"] {font-family:'Plus Jakarta Sans',sans-serif !important; font-weight:800 !important; color:#173755 !important;}
+[data-testid="stMetric"] [data-testid="stMetricDelta"] {font-weight:700 !important; color:#1E6F58 !important;}
+[data-testid="stDataFrame"] {border:1px solid #DDE7F2;border-radius:13px;overflow:hidden; background:#FFFFFF;}
+[data-testid="stExpander"] {border-radius:12px;border:1px solid #DDE7F2;background:#fff;}
 [data-testid="stButton"] button,[data-testid="stDownloadButton"] button{
- border-radius:10px;min-height:42px;font-weight:750;}
-[data-testid="stTabs"] [data-baseweb="tab"] {font-weight:700;}
-.footer-note{color:#8493A5;font-size:.76rem;margin-top:22px;padding-top:10px;border-top:1px solid #E1EAF4;}
+ border-radius:10px;min-height:42px;font-weight:750; background:#17324D; color:#FFFFFF; border:none;}
+[data-testid="stButton"] button:hover,[data-testid="stDownloadButton"] button:hover {
+  background:#102A4C; color:#FFFFFF; }
+[data-testid="stTabs"] [data-baseweb="tab"] {font-weight:700; color:#21415F !important;}
+[data-testid="stTabs"] [aria-selected="true"] {color:#173755 !important;}
+.footer-note{color:#506984;font-size:.82rem;line-height:1.6;margin-top:22px;padding-top:10px;border-top:1px solid #DDE7F2;}
 @media(max-width:900px){.block-container{padding:1.2rem 1rem 2rem}.hero{padding:23px}.hero .heading{font-size:1.47rem}}
 </style>
 """,
