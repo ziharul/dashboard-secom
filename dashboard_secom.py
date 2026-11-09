@@ -37,8 +37,34 @@ h1,h2,h3 {font-family:'Plus Jakarta Sans',sans-serif!important;color:#123554!imp
 [data-testid="stMetric"]{background:#FFFFFF;border:1px solid #E1EAF4;border-radius:16px;padding:15px 18px;box-shadow:0 3px 12px rgba(27,76,130,.035);}
 [data-testid="stMetricValue"]{color:#133B64;letter-spacing:-.035em;}
 [data-testid="stDataFrame"]{border:1px solid #E3EAF3;border-radius:12px;overflow:hidden;}
-section[data-testid="stSidebar"] .stRadio label{margin-bottom:.28rem;}
-section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label{padding:9px 12px!important;border-radius:10px;}
+section[data-testid="stSidebar"] div.stButton > button {
+    text-align:left!important;
+    justify-content:flex-start!important;
+    padding:12px 14px!important;
+    font-weight:650!important;
+    border-radius:11px!important;
+    white-space:normal!important;
+    height:auto!important;
+    min-height:45px!important;
+    transition: background-color .12s ease, border-color .12s ease;
+}
+section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {
+    background:#FFFFFF!important;
+    border:1px solid #E2EAF3!important;
+    color:#234664!important;
+}
+section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover {
+    background:#EEF6FF!important;
+    border-color:#86B5E6!important;
+}
+section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
+    color:#FFFFFF!important;
+    background:#286FB2!important;
+    border-color:#286FB2!important;
+}
+[data-testid="stMainBlockContainer"] div.stButton > button {
+    border-radius:10px;
+}
 .pill{display:inline-block;background:#ECF5FF;color:#2E69B3;font-size:.72rem;font-weight:800;border-radius:999px;padding:5px 12px;letter-spacing:.055em;}
 .hero{padding:23px 27px;border-radius:19px;background:linear-gradient(108deg,#163959,#276D9F);color:white;margin-bottom:17px;}
 .hero h1{color:white!important;font-size:1.9rem;margin:6px 0 9px;}
@@ -440,11 +466,14 @@ def stage_screen(n, category):
     st.markdown('### 3. Apa hasil yang diperoleh?')
     st.info(d['finding'])
     # Render structured source results, not generated experiments.
-    stage_custom_charts(n)
+    try:
+        stage_custom_charts(n)
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        st.warning(f'Grafik ringkasan tahap ini tidak dapat ditampilkan ({type(exc).__name__}). Tabel dan penjelasan hasil asli tetap tersedia di bawah.')
     for k,title in d['tables']:
         original_table(k,title)
     stage_figures(n,d)
-    st.markdown('### 4. Narasi lengkap untuk presentasi')
+    st.markdown('### 4. Penjelasan')
     st.markdown(f'<div class="story">{escape(d["story"])}</div>',unsafe_allow_html=True)
     if n < 28:
         following=STAGES[n+1]
@@ -454,34 +483,82 @@ def stage_screen(n, category):
     st.caption('Angka kinerja model berasal dari hasil yang telah dieksekusi di Colab. Grafik eksploratif dataset boleh interaktif; dashboard tidak melakukan training ulang atau mengubah nilai evaluasi.')
 
 
-def step_picker(ids,key):
-    selected=st.selectbox('Pilih tahapan Google Colab',ids,key=key,format_func=lambda x:f'Bagian {x:02d} — {STAGES[x]["title"]}')
-    l, m, r=st.columns([1,1.6,1])
-    pos=ids.index(selected)
-    with l:
-        st.button('← Tahap sebelumnya',disabled=(pos==0),on_click=lambda: st.session_state.update({key:ids[max(0,ids.index(st.session_state[key])-1)]}),use_container_width=True)
-    with m:
-        st.caption('Baca berurutan; hasil dari Colab, bukan urutan baru yang dibuat dashboard.')
-    with r:
-        st.button('Tahap berikutnya →',disabled=(pos==len(ids)-1),on_click=lambda: st.session_state.update({key:ids[min(len(ids)-1,ids.index(st.session_state[key])+1)]}),use_container_width=True)
+def _select_stage(key, stage):
+    # on_click runs before Streamlit builds a new frame.
+    st.session_state[key] = stage
+
+
+def step_picker(ids, key):
+    if key not in st.session_state or st.session_state[key] not in ids:
+        st.session_state[key] = ids[0]
+
+    # Directly clickable stage navigation; the selectbox is retained as a shortcut.
+    if key == 'stage_valid':
+        st.markdown('**Buka bagian validasi:**')
+        columns = st.columns(len(ids))
+        for column, number in zip(columns, ids):
+            with column:
+                st.button(
+                    f'Bagian {number}', key=f'{key}_direct_{number}',
+                    type='primary' if st.session_state[key] == number else 'secondary',
+                    on_click=_select_stage, args=(key, number), use_container_width=True,
+                )
+
+    selected=st.selectbox(
+        'Pilih tahapan Google Colab',ids,key=key,
+        format_func=lambda x:f'Bagian {x:02d} — {STAGES[x]["title"]}',
+    )
+    left, middle, right = st.columns([1, 1.6, 1])
+    pos = ids.index(selected)
+    with left:
+        st.button(
+            '← Tahap sebelumnya',key=f'{key}_previous',disabled=(pos==0),
+            on_click=_select_stage,args=(key, ids[max(0,pos-1)]),
+            use_container_width=True,
+        )
+    with middle:
+        st.caption('Pilih Bagian pada tombol atau daftar, lalu baca hasil penelitian asli secara berurutan.')
+    with right:
+        st.button(
+            'Tahap berikutnya →',key=f'{key}_next',disabled=(pos==len(ids)-1),
+            on_click=_select_stage,args=(key, ids[min(len(ids)-1,pos+1)]),
+            use_container_width=True,
+        )
     return selected
+
+
+def _select_page(page_name):
+    st.session_state['secom_active_page'] = page_name
+
+
+PAGES = [
+    '🏠 Peta Penelitian',
+    '📖 Penelitian Utama · Bagian 1–21',
+    '🚀 Pengembangan Model · Bagian 22–25',
+    '🛡️ Validasi Lanjutan · Bagian 26–28',
+    '📚 Sumber & Jejak Colab',
+]
+if st.session_state.get('secom_active_page') not in PAGES:
+    st.session_state['secom_active_page'] = PAGES[0]
 
 
 with st.sidebar:
     st.markdown('### ◈ SECOM Insight')
     st.caption('Wafer Quality Analytics · Penelitian Google Colab')
     st.divider()
-    page = st.radio('URUTAN PENELITIAN',[
-        '🏠 Peta Penelitian',
-        '📖 Penelitian Utama · Bagian 1–21',
-        '🚀 Pengembangan Model · Bagian 22–25',
-        '🛡️ Validasi Lanjutan · Bagian 26–28',
-        '📚 Sumber & Jejak Colab'
-    ])
+    st.caption('URUTAN PENELITIAN · KLIK MENU UNTUK MEMBUKA')
+    for i, menu_name in enumerate(PAGES):
+        st.button(
+            menu_name, key=f'secom_sidebar_menu_{i}',
+            type='primary' if st.session_state['secom_active_page']==menu_name else 'secondary',
+            on_click=_select_page, args=(menu_name,), use_container_width=True,
+        )
     st.divider()
     st.markdown('<span class="pill">DATA & HASIL COLAB ASLI</span>',unsafe_allow_html=True)
     st.caption('Baca penelitian utama terlebih dahulu, baru pengembangan model dan uji stabilitas.')
     st.caption('Created by Kelompok 2')
+
+page = st.session_state['secom_active_page']
 
 if page == '🏠 Peta Penelitian':
     header('OVERVIEW / RESEARCH JOURNEY','Alur Penelitian Kegagalan Wafer','Mulai dari notebook utama Bagian 1–21, kemudian ikuti eksperimen pengembangan dan validasi Bagian 22–28.')
@@ -530,9 +607,25 @@ elif page == '🛡️ Validasi Lanjutan · Bagian 26–28':
     chosen=step_picker([26,27,28],'stage_valid')
     stage_screen(chosen,'Validasi lanjutan')
 
-else:
+elif page == '📚 Sumber & Jejak Colab':
     header('AUDIT / TRACEABILITY','Jejak Google Colab','Lihat tabel dan gambar beserta nomor Bagian asal, bukan hanya nama teknis ekspor.')
     st.markdown('### Sumber penelitian')
+    st.caption('Pilih tabel atau gambar pada bagian di bawah untuk memeriksa asal hasilnya. Anda juga dapat mengunduh berkas sumber yang tersedia.')
+    source_files = [
+        ('Dataset penelitian (CSV)', DATA_PATH, 'text/csv'),
+        ('Tabel hasil asli Colab (JSON)', RESULT_PATH, 'application/json'),
+        ('Pemetaan jejak sel Colab (JSON)', PROV_PATH, 'application/json'),
+        ('Notebook Colab (IPYNB)', ROOT / 'notebook' / 'SECOM_Colab_Lengkap_SVM.ipynb', 'application/json'),
+    ]
+    with st.expander('Buka berkas sumber dan unduh', expanded=False):
+        for title, path, mime in source_files:
+            if path.is_file():
+                st.download_button(
+                    f'Unduh {title}', data=path.read_bytes(), file_name=path.name,
+                    mime=mime, key=f'secom_source_{path.name}', use_container_width=True,
+                )
+            else:
+                st.caption(f'{title}: berkas belum tersedia di repository.')
     st.write('**Dataset:** `data/data.csv` — sumber EDA dengan 1.567 wafer dan 590 variabel sensor.')
     st.write('**Hasil:** `results/tabel_notebook.json` — tabel output yang telah dijalankan dan diekspor dari notebook.')
     st.write('**Gambar:** `results/figures/` — visualisasi asli yang tersimpan dari output notebook.')
