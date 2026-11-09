@@ -1,0 +1,136 @@
+{
+  "notebook": "SECOM_Colab_Lengkap_SVM.ipynb",
+  "jumlah_sel": 84,
+  "dataset": "data/data.csv",
+  "sumber_tabel": {
+    "kualitas": {
+      "cell_index": 12,
+      "output_index": 0
+    },
+    "split_acak": {
+      "cell_index": 15,
+      "output_index": 0
+    },
+    "baseline_dummy": {
+      "cell_index": 32,
+      "output_index": 0
+    },
+    "screening": {
+      "cell_index": 35,
+      "output_index": 1
+    },
+    "ensemble_top": {
+      "cell_index": 48,
+      "output_index": 1
+    },
+    "threshold_train": {
+      "cell_index": 52,
+      "output_index": 1
+    },
+    "test_ci": {
+      "cell_index": 54,
+      "output_index": 1
+    },
+    "test_operasi": {
+      "cell_index": 55,
+      "output_index": 1
+    },
+    "split_kronologis_awal": {
+      "cell_index": 61,
+      "output_index": 1
+    },
+    "importance": {
+      "cell_index": 64,
+      "output_index": 1
+    },
+    "ringkasan_awal": {
+      "cell_index": 72,
+      "output_index": 0
+    },
+    "svm_test": {
+      "cell_index": 75,
+      "output_index": 1
+    },
+    "svm_cv": {
+      "cell_index": 76,
+      "output_index": 1
+    },
+    "alternatif_cv": {
+      "cell_index": 77,
+      "output_index": 1
+    },
+    "alternatif_test": {
+      "cell_index": 77,
+      "output_index": 5
+    },
+    "eksperimen_24": {
+      "cell_index": 78,
+      "output_index": 3
+    },
+    "eksperimen_24_test": {
+      "cell_index": 78,
+      "output_index": 5
+    },
+    "bobot_25": {
+      "cell_index": 79,
+      "output_index": 1
+    },
+    "hasil_25": {
+      "cell_index": 79,
+      "output_index": 3
+    },
+    "fold_26": {
+      "cell_index": 81,
+      "output_index": 1
+    },
+    "ringkasan_26": {
+      "cell_index": 81,
+      "output_index": 3
+    },
+    "stabilitas_fold_27": {
+      "cell_index": 82,
+      "output_index": 3
+    },
+    "bobot_kronologis": {
+      "cell_index": 82,
+      "output_index": 7
+    },
+    "hasil_27": {
+      "cell_index": 82,
+      "output_index": 9
+    },
+    "bootstrap_28": {
+      "cell_index": 83,
+      "output_index": 1
+    },
+    "loo_28": {
+      "cell_index": 83,
+      "output_index": 3
+    },
+    "bobot_bootstrap_28": {
+      "cell_index": 83,
+      "output_index": 5
+    },
+    "rekap_28": {
+      "cell_index": 83,
+      "output_index": 7
+    }
+  },
+  "gambar": {
+    "missing_distribution": "results/figures/missing_distribution.png",
+    "missing_matrix": "results/figures/missing_matrix.png",
+    "eda_temporal": "results/figures/eda_temporal.png",
+    "univariat": "results/figures/univariat.png",
+    "korelasi": "results/figures/korelasi.png",
+    "pca_tsne": "results/figures/pca_tsne.png",
+    "screening": "results/figures/screening.png",
+    "training_threshold": "results/figures/training_threshold.png",
+    "test_threshold": "results/figures/test_threshold.png",
+    "roc_pr_test": "results/figures/roc_pr_test.png",
+    "shap": "results/figures/shap.png",
+    "stabilitas_27": "results/figures/stabilitas_27.png",
+    "paired_bootstrap_28": "results/figures/paired_bootstrap_28.png",
+    "bobot_28": "results/figures/bobot_28.png"
+  },
+  "catatan": "Tabel dan gambar disalin dari output notebook; tanpa training ulang."
+}
