@@ -100,9 +100,8 @@ html, body, [class*="css"], [data-testid="stApp"] {
   font-family:'DM Sans',sans-serif; color:#18324D !important; }
 [data-testid="stAppViewContainer"] { background:#F4F7FB; }
 [data-testid="stHeader"] { background:rgba(244,247,251,.96); }
-.block-container {max-width:1450px; padding:2.05rem 2.7rem 4rem;}
+.block-container {max-width:1450px; padding:3.1rem 2.7rem 4rem;}
 [data-testid="stSidebar"] { background:#FFFFFF; border-right:1px solid #DCE6F2; }
-[data-testid="stSidebar"] * { color:#17324D !important; opacity:1 !important; }
 [data-testid="stSidebar"] .stRadio > label,
 [data-testid="stSidebar"] .stFileUploader > label,
 [data-testid="stSidebar"] .stSelectbox > label,
@@ -127,6 +126,13 @@ html, body, [class*="css"], [data-testid="stApp"] {
   background:#FFFFFF; border:1px dashed #BACBE0; border-radius:14px; }
 [data-testid="stSidebar"] .stFileUploader section button {
   background:#17324D !important; color:#FFFFFF !important; border:none; }
+[data-testid="stSidebar"] .stFileUploader section button *,
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * {
+  color:#FFFFFF !important; opacity:1 !important;
+}
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzoneInstructions"] * {
+  color:#33516F !important; opacity:1 !important;
+}
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
   background:#F8FBFF; border-radius:14px; }
 h1,h2,h3,h4 {font-family:'Plus Jakarta Sans',sans-serif !important;
@@ -135,11 +141,41 @@ h1 {font-size:2rem!important;font-weight:800!important;}
 h2 {font-size:1.35rem!important;font-weight:800!important;}
 h3 {font-size:1.05rem!important;}
 p {line-height:1.65; color:#304963;}
-label, .stMarkdown, .stCaption, .stText, .st-emotion-cache-10trblm,
-[data-testid="stMetricLabel"], [data-testid="stMetricValue"], [data-testid="stMetricDelta"],
-[data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
-  color:#18324D !important;
+/* Match chart and all widgets to the light palette, including when the user has
+   previously selected a dark theme in the browser. Scoped selectors avoid making
+   native alert text invisible on a dark alert surface. */
+[data-testid="stAppViewContainer"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stMarkdownContainer"] > p,
+[data-testid="stMarkdownContainer"] > ul,
+[data-testid="stMarkdownContainer"] > ol,
+[data-testid="stCaptionContainer"] p {
+  color:#233F5B !important;
 }
+[data-testid="stSidebar"] [role="radiogroup"] label p,
+[data-testid="stSidebar"] [role="radiogroup"] label span {
+  color:#1B3957 !important; font-weight:650 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+  background:#FFFFFF !important; color:#193651 !important;
+  border:1px solid #C6D6E8 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stMultiSelect"] [data-baseweb="select"] * {
+  color:#193651 !important;
+}
+[data-testid="stSlider"] [data-testid="stThumbValue"] {color:#173755 !important;}
+/* Alerts must be readable even when the Streamlit theme selected in the browser
+   differs from the theme set by our repo. */
+[data-testid="stAlert"] {background:#EAF2FF !important;border:1px solid #C7DDF6 !important;}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] span,
+[data-testid="stAlert"] svg {color:#173F6C !important;fill:currentColor;}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] {color:#173F6C !important;}
 .hero {border-radius:20px;padding:32px 36px 33px;margin-bottom:24px;
  background:linear-gradient(112deg,#0D2849 0%,#183E78 58%,#346BD6 100%);
  box-shadow:0 16px 35px rgba(13,43,95,.13);position:relative;overflow:hidden;}
@@ -179,7 +215,7 @@ label, .stMarkdown, .stCaption, .stText, .st-emotion-cache-10trblm,
 [data-testid="stTabs"] [data-baseweb="tab"] {font-weight:700; color:#21415F !important;}
 [data-testid="stTabs"] [aria-selected="true"] {color:#173755 !important;}
 .footer-note{color:#506984;font-size:.82rem;line-height:1.6;margin-top:22px;padding-top:10px;border-top:1px solid #DDE7F2;}
-@media(max-width:900px){.block-container{padding:1.2rem 1rem 2rem}.hero{padding:23px}.hero .heading{font-size:1.47rem}}
+@media(max-width:900px){.block-container{padding:2.8rem 1rem 2rem}.hero{padding:23px}.hero .heading{font-size:1.47rem}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -220,13 +256,23 @@ def base_chart(height: int = 355, margin: dict | None = None) -> dict:
     return dict(
         height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=margin or dict(l=12, r=18, t=20, b=35),
-        font=dict(family="DM Sans, sans-serif", size=12, color="#5E7085"),
-        hoverlabel=dict(bgcolor="#FFF"),
+        template="plotly_white",
+        font=dict(family="DM Sans, sans-serif", size=13, color="#284560"),
+        hoverlabel=dict(bgcolor="#FFF", font=dict(color="#173755", size=12)),
     )
 
 
 def show_chart(fig: go.Figure) -> None:
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    # Disable Streamlit's graph theme: otherwise a previously selected dark theme
+    # can turn axis labels white on our explicitly light chart background.
+    fig.update_layout(template="plotly_white", font=dict(color="#284560"),
+                      legend=dict(font=dict(color="#284560", size=12)))
+    fig.update_xaxes(tickfont=dict(color="#334F6B", size=12),
+                     title_font=dict(color="#284560"))
+    fig.update_yaxes(tickfont=dict(color="#334F6B", size=12),
+                     title_font=dict(color="#284560"))
+    st.plotly_chart(fig, use_container_width=True, theme=None,
+                    config={"displayModeBar": False})
 
 
 def donut_counts(pass_count: int, fail_count: int) -> go.Figure:
@@ -342,6 +388,7 @@ with st.sidebar:
       <div style="font-size:.72rem;color:#8493A7;">Wafer Quality Analytics</div></div>
     </div><hr style="border:0;border-top:1px solid #E8EDF5;margin:14px 0 9px;">
     """, unsafe_allow_html=True)
+    st.caption("Tampilan v1.2 · Kontras diperbaiki")
     selection = st.radio(
         "NAVIGASI ANALISIS",
         ["📊 Ringkasan", "🧪 Kualitas Data", "🏆 Perbandingan Model",
